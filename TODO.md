@@ -2,4 +2,4 @@
 
 ## general
 * check how the nugget should be used for prediction vs estimation with the posterior
-* fix progress bar and optimization results printing
+* remove pickle dependancy by storing basis function strings and rebuilding the basis on loading

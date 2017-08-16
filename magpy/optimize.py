@@ -9,14 +9,12 @@ np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
 
 ## progress bar
-def printProgBar (iteration, total, HP, prefix = '', suffix = '', decimals = 0, length = 15, fill = '█'):
+def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, length = 20, fill = '█'):
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
     bar = fill * filledLength + '-' * (length - filledLength)
 
-    HP = np.around(HP,decimals=4)
-
-    print('\r=> Best HP:', HP ,'%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
+    print('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix), end = '\r')
     # Print New Line on Complete
     if iteration == total: 
         print()
@@ -164,56 +162,52 @@ def optimize(E, tries=1, bounds={}, constrain=False, message=False):
     ## guess loop
     guess = np.zeros(len(bounds))
     firstTry, bestMin = True, 10000000.0
-    progBar = True
-    #printProgressBar(0, tries, prefix = 'Progress:', suffix = '', length = 25)
+    printProgBar(0, tries, prefix = 'Progress:', suffix = '')
     for t in range(tries):
+
         for i,b in enumerate(bounds): guess[i] = E.GP.K.transform(b[0]+(b[1]-b[0])*np.random.rand())
-        #for i,b in enumerate(boundsTransform): guess[i] = (b[0]+(b[1]-b[0])*np.random.rand())
  
+        initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
+        print("  Guess: ", initGuess)
+        printProgBar(t, tries, prefix = 'Progress:')
+
         nonPSDfail = False
         JAC = False
         try:
             if constrain:
                 res = minimize(LLH, guess, args=(E,),
-                               method = 'L-BFGS-B', jac=JAC, bounds=boundsTransform)
+                        method = 'L-BFGS-B', jac=JAC, bounds=boundsTransform)
             else:
                 res = minimize(LLH, guess, args=(E,),
-                               method = 'L-BFGS-B', jac=JAC)
+                        method = 'L-BFGS-B', jac=JAC)
         except TypeError as e:
             nonPSDfail = True
 
         ## check that we didn't fail by having non-PSD matrix
         if nonPSDfail == False:
-            if message: print(res)
+            notFit = True if res.nfev == 1 else False # check >1 iteration
 
-            ## check more than 1 iteration was done
-            nfev = res.nfev
-            notFit = True if nfev == 1 else False
-
-            if notFit: print("  WARNING: Only 1 iteration for", HP, ", not fitted.")
-            if res.success == False: print("  WARNING: Unsuccessful termination for", HP, ", not fitted.")
-            if message: print("\n")
+            if notFit:
+                print("  WARNING: Only 1 iteration for", HP, ", not fitted.")
+            if res.success == False:
+                print("  WARNING: Bad termination for", HP, ", not fitted.")
+            if message: print(res, "\n")
 
             ## result of fit
             HP = np.around(E.GP.K.untransform(res.x),decimals=4)
-            initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
-            if progBar == False: print("  HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
+            print("  => HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
                 
             ## set best result
-            if (res.fun < bestMin or firstTry) and notFit == False and res.success == True:
-                #print("Initial guess:", initGuess)
-                #print("  New Best HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
+            if (res.fun < bestMin or firstTry)\
+              and notFit == False and res.success == True:
                 bestMin, bestHP = res.fun, E.GP.K.untransform(res.x)
                 firstTry = False
+ 
+    printProgBar(tries, tries, prefix = 'Progress:')
 
-        ## print progress bar
-        if progBar == True: printProgBar(t + 1, tries, bestHP, prefix = 'Progress:')
-        
     print("= Best Optimization Result =")
     if firstTry == False:
         if E.GP.mucm == True:
-            ## rewrite this...
-            print("rewrite")
             E.GP.delta = bestHP[0:E.GP.delta.size]
             if E.GP.fixNugget == False:  E.GP.nugget = bestHP[-1]
             E.GP.sigma, E.Basis.beta = loglikelihood_mucm(E.GP.K.transform(bestHP), E, SigmaBeta=True)
@@ -225,7 +219,10 @@ def optimize(E, tries=1, bounds={}, constrain=False, message=False):
 
         E.GP.makeA()
 
-        print("Best HP:", E.GP.delta, E.GP.nugget, E.GP.sigma)
+        for i,d in enumerate(E.GP.delta):
+            print("Best Delta", E.Data.active[i], ":", d)
+        print("Best Nugget:", E.GP.nugget)
+        print("Best Sigma:", E.GP.sigma)
         print("Beta:", E.Basis.beta)
 
     else:
