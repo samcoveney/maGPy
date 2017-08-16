@@ -82,7 +82,6 @@ class Emulator:
 
     ## posterior distribution
     def posterior(self, X, predict=False, Y=None):
-        print("Calculating full posterior")
 
         # need other checks on X and Y as well as filter e.g. length
         X, Y = self.filter(X, Y)
@@ -91,30 +90,21 @@ class Emulator:
         Anew = self.GP.K.A(X, self.GP.delta, self.GP.nugget, predict)
 
         try:
-            L = np.linalg.cholesky(self.GP.A) 
-            w = np.linalg.solve(L,self.Basis.H)
-            Q = w.T.dot(w) # H A^-1 H
-            K = np.linalg.cholesky(Q)
-            T = linalg.solve(self.GP.A, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
+            L = linalg.cho_factor(self.GP.A)        
+            invA_H = linalg.cho_solve(L, self.Basis.H)
+            Q = self.Basis.H.T.dot(invA_H)
+            K = linalg.cho_factor(Q)
+            T = linalg.cho_solve(L, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
+            Hnew = self.Basis.funcs(X)
+            R = Hnew - covar.T.dot( invA_H )
+
+            mean = Hnew.dot( self.Basis.beta ) + (covar.T).dot(T)
+            var = (self.GP.sigma**2) \
+              * ( Anew - (covar.T).dot( linalg.cho_solve(L, covar) ) 
+                + R.dot( linalg.cho_solve(K, R.T) ) )
         except np.linalg.linalg.LinAlgError as e:
             print("ERROR:", e)
             return None
-
-        ## forloop version
-        #Hnew = np.empty([X.shape[0], self.Basis.beta.size])
-        #for i in range(X.shape[0]):
-        #    Hnew[i] = self.Basis.funcs(X[i])
-
-        ## vectorized version
-        Hnew = self.Basis.funcs(X)
-
-        R = Hnew - covar.T.dot( np.linalg.solve(L.T, np.linalg.solve(L,self.Basis.H)) )
-
-        mean = Hnew.dot( self.Basis.beta ) + (covar.T).dot(T)
-
-        var = (self.GP.sigma**2) \
-          * ( Anew - (covar.T).dot( np.linalg.solve(L.T, np.linalg.solve(L, covar) ) ) 
-            + R.dot( np.linalg.solve( K.T, np.linalg.solve(K, R.T) ) ) )
 
         # 95% confidence intervals
         CItemp = 1.96*np.sqrt(np.abs(var.diagonal()))
@@ -129,47 +119,33 @@ class Emulator:
 
         return post
 
-    ## function for 'fast' posterior i.e. just the diagonals and pointwise variance
+    ## function for 'fast' posterior i.e. only pointwise variance
     def posteriorPartial(self, X, predict=False):
-        print("Calculating partial posterior (only pointwise posterior variance)")
 
+        # need other checks on X and Y as well as filter e.g. length
         X, Y = self.filter(X, None)
 
-        ## NOTES
-        #### to get estimation (not prediction), do NOT add nugget *back on* to K** diag
-        s2 = self.GP.sigma**2  # sigma*2
         Anew = (1.0-self.GP.nugget) if predict == False else 1.0 # K**
+        Hnew = self.Basis.funcs(X)
 
-        T = linalg.solve(self.GP.A, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
-     
         try:
-            L = np.linalg.cholesky(self.GP.A) 
-            w = np.linalg.solve(L,self.Basis.H)
-            Q = w.T.dot(w) # H A^-1 H
-            K = np.linalg.cholesky(Q)
-            T = linalg.solve(self.GP.A, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
+            L = linalg.cho_factor(self.GP.A)        
+            invA_H = linalg.cho_solve(L, self.Basis.H)
+            Q = self.Basis.H.T.dot(invA_H)
+            K = linalg.cho_factor(Q)
+            T = linalg.cho_solve(L, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
         except np.linalg.linalg.LinAlgError as e:
             print("ERROR:", e)
             return None
 
-        ## NEEDS APAPTING INTO A 'BATCH MODE' THAT PROCESSES BATCHES AT A TIME FOR SPEED
+        ## do in batches
+        covar = self.GP.K.covar(self.Data.xT, X, self.GP.delta, self.GP.nugget)
+        R = Hnew - covar.T.dot( invA_H )
 
-        P = X.shape[0]
-        mean, var = np.empty(P), np.empty(P)
-        Hnew = np.array(self.Basis.funcs(X)) # H* -- now calculated here in full
-        ## loop over test points
-        for p in range(P):
-            x = X[p].reshape(-1, X.shape[1])
-            covar = self.GP.K.covar(self.Data.xT, x, self.GP.delta, self.GP.nugget)  # K*
-
-            #Hnew = np.array(self.Basis.funcs(x[p])) # H*
-            #R = Hnew - (covar.T).dot(np.linalg.solve(L.T, np.linalg.solve(L,self.Basis.H)))
-            R = Hnew[p] - (covar.T).dot(np.linalg.solve(L.T, np.linalg.solve(L,self.Basis.H)))
-
-            #mean[p] = Hnew.dot(self.Basis.beta) + (covar.T).dot(T)
-            mean[p] = Hnew[p].dot(self.Basis.beta) + (covar.T).dot(T)
-            var[p]  = s2*( Anew - (covar.T).dot( np.linalg.solve(L.T, np.linalg.solve(L, covar) ) )
-                         + R.dot( np.linalg.solve( K.T, np.linalg.solve(K, R.T) ) ) )
+        mean = Hnew.dot( self.Basis.beta ) + (covar.T).dot(T)
+        var = np.diag( (self.GP.sigma**2) \
+          * ( Anew -  (covar.T).dot( linalg.cho_solve(L, covar) ) 
+            + R.dot( linalg.cho_solve(K, R.T) ) ) )
 
         # 95% confidence intervals
         CItemp = 1.96*np.sqrt(np.abs(var))
