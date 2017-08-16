@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import linalg
-import dill as pickle
+import pickle
 
 import magpy.kernels as mk
 from magpy._utils import *
@@ -33,9 +33,13 @@ class Emulator:
     ## pickle a list of relevant data
     def save(self, filename):
         print("Pickling emulator data in", filename, "...")
+        # cannot pickle lambda function
+        basisFuncs = self.Basis.funcs
+        self.Basis.funcs = None
         emu = [ self.Data, self.Basis, self.GP ]
         with open(filename, 'wb') as output:
             pickle.dump(emu, output, pickle.HIGHEST_PROTOCOL)
+        self.Basis.funcs = basisFuncs
         return
 
     ## unpickle a list of relevant data
@@ -44,6 +48,7 @@ class Emulator:
         with open(filename, 'rb') as input:
             emu = pickle.load(input)
         self.Data, self.Basis, self.GP = emu[0], emu[1], emu[2]
+        self.Basis.setup(self.Basis.basisGlobal) # recreate lambda function
         return
 
     ## validation checks against stored validation data
@@ -283,28 +288,23 @@ class Emulator:
             self.funcs = None
             self.H = []
             self.Data = Data
+            self.basisGlobal = None
 
         ## will need access to 'active' ... 
         def setup(self, basisGlobal=None):
             print("= Setting up basis functions =")
+            self.basisGlobal = basisGlobal
 
-            if basisGlobal == None:  # default LINEAR mean option
+            if self.basisGlobal == None:  # default LINEAR mean option
                 print("Setting default Linear mean")
-                ## forloop version
-                #basisLocal = "1.0, "
-                #size = 1
-                #for key in self.Data.activeRef:
-                #    basisLocal += "x[" + str(self.Data.activeRef[key]) + "], "
-                #    size += 1
-                ## vectorized version
                 self.funcs = eval("lambda x: np.concatenate((np.ones([x.shape[0],1]), x), axis=1)")
                 size = len(self.Data.activeRef) + 1
 
             else:  # user provided basis functions
-                print("Original basis functions:", basisGlobal)
+                print("Original basis functions:", self.basisGlobal)
 
                 # remove functions including non-active indices
-                temp, temp2 = basisGlobal.split(","), []
+                temp, temp2 = self.basisGlobal.split(","), []
                 for i in temp:
                     try:
                         item = i.split("[")[1].split("]")[0]
