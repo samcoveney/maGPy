@@ -62,7 +62,6 @@ class Emulator:
         if X.shape[1] == self.Data.xAll.shape[1] and X.shape[1] != self.Data.xT.shape[1]:
             X = X[:,self.Data.active]
             if Y is not None:
-                #if Y.shape[1] == 1:  Y = Y.reshape(Y.shape[0],1) # should be 2D anyway
                 Y = Y[:,self.Data.output] # if all features, assume all outputs, filter them
         return X, Y
 
@@ -218,7 +217,6 @@ class Emulator:
                 print("Not shuffling data points")
 
             ## scale the inputs 
-            #xTemp, yTemp = np.empty(self.xAll.shape), np.empty(self.yAll.shape)
             xTemp = np.empty(self.xAll.shape)
             for i in range(self.xAll.shape[1]):
                 xTemp[:,i] = (self.xAll[:,i]    - self.minmax[i][0])\
@@ -239,14 +237,13 @@ class Emulator:
             for idx in sorted(active):
                 self.activeRef[idx] = count
                 count = count + 1
-            print("Relate active global indices to local indices:" , self.activeRef)
+            print("Active global indices: local indices" , self.activeRef)
 
             ## select output
             self.output = output
             yTemp = self.yAll[:,self.output]
 
             ## create training and validation sets
-            #if V > 0:
             Vnum = int(self.xAll.shape[0]*V/100.0)
             Tnum = self.xAll.shape[0] - Vnum
             if Tnum < 1:
@@ -317,20 +314,18 @@ class Emulator:
 
                 # remap Global indices mapped into Local indices
                 basisLocal = ""
-                sq = lambda x: "["   + str(x) + "]"    # forloop version
-                #sqReplace = lambda x: "["   + str(x) + "]"    # forloop version
-                sqReplace = lambda x: "[:," + str(x) + "]"  # vectorized version
+                sq = lambda x: "["   + str(x) + "]"
+                sqReplace = lambda x: "[:," + str(x) + "]"
                 for i in temp2:
                     for key in sorted(self.Data.active):
                         i = i.replace( sq(key) , sqReplace(self.Data.activeRef[key]) )
                     basisLocal += i + ","
-                size = len(temp2) + 1  # we'll always include the constant part of mean
+                size = len(temp2) + 1  # constant part of mean provided below
 
                 print("Local basis functions:", "1.0," , basisLocal)
                 print("N.B. constant '1.0' basis function always provided")
 
-                #self.funcs = eval("lambda x: [" + basisLocal + "]")           # forloop version
-                self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"  # vectorized version
+                self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"
                                  + basisLocal + " ]).T")
 
             self.beta = np.ones(size)
@@ -338,10 +333,4 @@ class Emulator:
 
         ## create the H matrix
         def makeH(self):
-            ## forloop version
-            #self.H = np.empty([self.Data.xT.shape[0], self.beta.size])
-            #for i in range(self.Data.xT.shape[0]):
-            #    self.H[i] = self.funcs(self.Data.xT[i])
-
-            ## vectorized version
             self.H = self.funcs(self.Data.xT)
