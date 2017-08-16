@@ -124,48 +124,48 @@ def loglikelihood_mucm(guess, E, SigmaBeta=False):
 
 
 #def optimize(E, deltaBounds={}, nuggetBounds=[], sigmaBounds=[]):
-def optimize(E, tries=1, bounds={}, constrain=False, message=False):
+def optimize(E, tries=1, bounds={}, constraints={}, message=False):
     print("= Optimizing emulator parameters =")
 
-    ## setup bounds
-    dT = [[0.01,1.0] for i in E.Data.active]
-    for a in E.Data.active: dT[E.Data.activeRef[a]] = bounds[a] if a in bounds else [0.01,1.0]
-    for a in E.Data.active: print("Delta", a, "bounds:", dT[E.Data.activeRef[a]])
-    bounds = dT
-
+    ## build full dictionary of bounds for active HPs
+    bDic = {}
+    for a in E.Data.active: bDic[a] = bounds[a] if a in bounds else [0.01,1.0]
     if E.GP.fixNugget == False:
-        # should really max of 1.0
-        nT = bounds['n'] if 'n' in bounds else [0.00000001,1.0]
-        print("Nugget bounds:", nT)
-        bounds.append(nT)
-    else:
-        print("Nugget is fixed.")
- 
+        bDic['n'] = bounds['n'] if 'n' in bounds else [0.00000001,1.0]
     if E.GP.mucm == False:
         # could have better initial bounds for sigma
         temp = np.sqrt( np.amax(E.Data.yT) - np.amin(E.Data.yT) )
-        sT = bounds['s'] if 's' in bounds else [0.1, temp]
-        print("Sigma bounds:", sT)
-        bounds.append(sT)
-        LLH = loglikelihood_gp4ml  # select 'normal' method
-    else:
-        print("Using MUCM method for Sigma.")
-        LLH = loglikelihood_mucm   # select 'mucm' method
-    
-    bounds = tuple(bounds)
-    #print("Bounds:", bounds)
+        bDic['s'] = bounds['s'] if 's' in bounds else [0.1, temp]
+    print("Bounds:", bDic)
 
-    ## might as well transform bounds here?
-    boundsTransform = E.GP.K.transform(bounds) ## MAY NEED TO MAKE THIS A TUPLE OF LISTS...
-    #print("Transformed bounds:", boundsTransform)
+    ## set constraints dictionary
+    useConstraints = False if constraints == {} else True
+    cDic = bDic.copy()
+    for key in constraints: cDic[key] = constraints[key]
+    if useConstraints == True: print("Constraints:", cDic)
+
+    ## turn dictionaries into lists
+    ## REQUIRES THAT ACTIVE BE SOTRTED INTO ORDER
+    boundsTemp, constraintsTemp = [], []
+    for item in [[boundsTemp, bDic], [constraintsTemp, cDic]]:
+        for a in E.Data.active:  item[0].append(item[1][a])
+        if 'n' in item[1]:    item[0].append(item[1]['n'])
+        if 's' in item[1]:    item[0].append(item[1]['s'])
+    #print("Bounds list:", boundsTemp)
+    #print("Constraints list:", constraintsTemp)
+
+    LLH = loglikelihood_mucm if E.GP.mucm == True else loglikelihood_gp4ml
+
+    boundsTransform = E.GP.K.transform(boundsTemp)
+    constraintsTransform = E.GP.K.transform(constraintsTemp)
 
     ## guess loop
-    guess = np.zeros(len(bounds))
+    guess = np.zeros(len(boundsTemp))
     firstTry, bestMin = True, 10000000.0
     printProgBar(0, tries, prefix = 'Progress:', suffix = '')
     for t in range(tries):
 
-        for i,b in enumerate(bounds): guess[i] = E.GP.K.transform(b[0]+(b[1]-b[0])*np.random.rand())
+        for i,b in enumerate(boundsTemp): guess[i] = E.GP.K.transform(b[0]+(b[1]-b[0])*np.random.rand())
  
         initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
         print("  Guess: ", initGuess)
@@ -174,9 +174,9 @@ def optimize(E, tries=1, bounds={}, constrain=False, message=False):
         nonPSDfail = False
         JAC = False
         try:
-            if constrain:
+            if useConstraints == True:
                 res = minimize(LLH, guess, args=(E,),
-                        method = 'L-BFGS-B', jac=JAC, bounds=boundsTransform)
+                        method = 'L-BFGS-B', jac=JAC, bounds=constraintsTransform)
             else:
                 res = minimize(LLH, guess, args=(E,),
                         method = 'L-BFGS-B', jac=JAC)

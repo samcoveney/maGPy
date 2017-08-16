@@ -223,6 +223,7 @@ class Emulator:
                           / (self.minmax[i][1] - self.minmax[i][0])
 
             ## select active inputs
+            active.sort()
             if active != []:
                 print("Only input features", active, "are active")
                 xTemp = xTemp[:,active]
