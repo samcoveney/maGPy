@@ -157,7 +157,13 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
     LLH = loglikelihood_mucm if E.GP.mucm == True else loglikelihood_gp4ml
 
     boundsTransform = E.GP.K.transform(boundsTemp)
-    constraintsTransform = E.GP.K.transform(constraintsTemp)
+    constraintsTransform = []
+    for item in constraintsTemp:
+        item0 = E.GP.K.transform(item[0]) if item[0] is not None else None
+        item1 = E.GP.K.transform(item[1]) if item[1] is not None else None
+        constraintsTransform.append([item0, item1])
+    #print("Bounds list:", boundsTransform)
+    #print("Constraints list:", constraintsTransform)
 
     ## guess loop
     guess = np.zeros(len(boundsTemp))
