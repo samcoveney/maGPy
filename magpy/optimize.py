@@ -1,21 +1,9 @@
 from __future__ import print_function
 import numpy as np
 from scipy import linalg
-from scipy.optimize import minimize
-import time
+from scipy.optimize import minimize, check_grad
 
-from scipy.optimize import check_grad
-
-## use '@timeit' to decorate a function for timing
-def timeit(f):
-    def timed(*args, **kw):
-        ts = time.time()
-        for r in range(1): # calls function 100 times
-            result = f(*args, **kw)
-        te = time.time()
-        print('func: %r took: %2.4f sec' % (f.__name__, te-ts) )
-        return result
-    return timed
+from magpy._utils import *
 
 np.set_printoptions(precision=6)
 np.set_printoptions(suppress=True)
