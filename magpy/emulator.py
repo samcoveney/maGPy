@@ -242,6 +242,7 @@ class Emulator:
 
             ## select output
             self.output = output
+            print("Using output feature", self.output)
             yTemp = self.yAll[:,self.output]
 
             ## create training and validation sets

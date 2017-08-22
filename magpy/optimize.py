@@ -37,14 +37,14 @@ def loglikelihood_gp4ml(guess, E, Beta=False):
     ## calculate LLH
     try:
         if True: # cho_factor
-            L2 = linalg.cho_factor(A)        
-            invA_y = linalg.cho_solve(L2, E.Data.yT)
-            invA_H = linalg.cho_solve(L2, E.Basis.H)
+            L = linalg.cho_factor(A)        
+            invA_y = linalg.cho_solve(L, E.Data.yT)
+            invA_H = linalg.cho_solve(L, E.Basis.H)
             Q = E.Basis.H.T.dot(invA_H)
-            K2 = linalg.cho_factor(Q)
-            B = linalg.cho_solve(K2, E.Basis.H.T.dot(invA_y)) # (H A^-1 H)^-1 H A^-1 y
-            logdetA = 2.0*np.sum(np.log(np.diag(L2[0])))
-            #print(np.diag(L2[0]))
+            K = linalg.cho_factor(Q)
+            B = linalg.cho_solve(K, E.Basis.H.T.dot(invA_y)) # (H A^-1 H)^-1 H A^-1 y
+            logdetA = 2.0*np.sum(np.log(np.diag(L[0])))
+            #print(np.diag(L[0]))
         else:
             L = np.linalg.cholesky(A)
             w = np.linalg.solve(L,E.Basis.H)
@@ -88,14 +88,14 @@ def loglikelihood_mucm(guess, E, SigmaBeta=False):
     ## calculate LLH
     try:
         if True: # cho_factor
-            L2 = linalg.cho_factor(A)        
-            invA_y = linalg.cho_solve(L2, E.Data.yT)
-            invA_H = linalg.cho_solve(L2, E.Basis.H)
+            L = linalg.cho_factor(A)        
+            invA_y = linalg.cho_solve(L, E.Data.yT)
+            invA_H = linalg.cho_solve(L, E.Basis.H)
             Q = E.Basis.H.T.dot(invA_H)
-            K2 = linalg.cho_factor(Q)
-            B = linalg.cho_solve(K2, E.Basis.H.T.dot(invA_y)) # (H A^-1 H)^-1 H A^-1 y
-            logdetA = 2.0*np.sum(np.log(np.diag(L2[0])))
-            #print(np.diag(L2[0]))
+            K = linalg.cho_factor(Q)
+            B = linalg.cho_solve(K, E.Basis.H.T.dot(invA_y)) # (H A^-1 H)^-1 H A^-1 y
+            logdetA = 2.0*np.sum(np.log(np.diag(L[0])))
+            #print(np.diag(L[0]))
         else:
             L = np.linalg.cholesky(A)
             w = np.linalg.solve(L,E.Basis.H)
@@ -194,9 +194,9 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
             notFit = True if res.nfev == 1 else False # check >1 iteration
 
             if notFit:
-                print("  WARNING: Only 1 iteration for", HP, ", not fitted.")
+                print("  WARNING: Only 1 iteration, not fitted.")
             if res.success == False:
-                print("  WARNING: Bad termination for", HP, ", not fitted.")
+                print("  WARNING: Bad termination for, not fitted.")
             if message: print(res, "\n")
 
             ## result of fit
@@ -228,7 +228,10 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
         for i,d in enumerate(E.GP.delta):
             print("Best Delta", E.Data.active[i], ":", d)
         print("Best Nugget:", E.GP.nugget)
-        print("Best Sigma:", E.GP.sigma)
+        if E.GP.mucm == True:
+            print("MUCM Sigma:", E.GP.sigma)
+        else:
+            print("Best Sigma:", E.GP.sigma)
         print("Beta:", E.Basis.beta)
 
     else:
