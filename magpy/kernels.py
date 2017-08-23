@@ -31,26 +31,24 @@ class RBFmucm():
             _np.fill_diagonal(A , 1.0 - nugget)
         return A
 
-#    ## derivative wrt delta
-#    def grad_delta_A(self, X, di, s2):
-#        N = X.size
-#        w = 1.0 / self.d[di]
-#
-#        f = _dist.pdist((X*w).reshape(N,1),'sqeuclidean')
-# 
-#        f = ((1.0-self.n)*s2)*f*self.expUT
-#        f = _dist.squareform(f)
-#        ## because of prefactor, diagonal will be zeros
-#
-#        return f
-#
-#    ## derivative wrt nugget
-#    def grad_nugget_A(self, X, s2):
-#        f = (0.5*(-self.n)*s2)*self.expUT
-#        f = _dist.squareform(f)
-#        ## don't add 1.0 onto the diagonal here 
-#
-#        return f
+    ## derivative wrt delta
+    def gradWrtDelta(self, X, delta, nugget, s2):
+        N = X.size
+        w = 1.0 / delta
+        f = _dist.pdist((X*w).reshape(N,1),'sqeuclidean')
+        f = ((1.0-nugget)*s2)*f*self.expUT
+        f = _dist.squareform(f)
+        ## because of prefactor, diagonal will be zeros
+
+        return f
+
+    ## derivative wrt nugget
+    def gradWrtNugget(self, X, nugget, s2):
+        f = (0.5*(-nugget)*s2)*self.expUT
+        f = _dist.squareform(f)
+        ## don't add 1.0 onto the diagonal here 
+
+        return f
         
     ## calculates the covariance matrix A(X,X') 
     def covar(self, XT, XV, delta, nugget):

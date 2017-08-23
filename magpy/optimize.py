@@ -22,7 +22,7 @@ def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, leng
 
 
 ## the loglikelihood provided by Gaussian Processes for Machine Learning
-def loglikelihood_gp4ml(guess, E, Beta=False):
+def loglikelihood_gp4ml(guess, E, Beta=False, debug=False):
 
     ## set the hyperparameters
     guess = E.GP.K.untransform(guess)
@@ -32,7 +32,8 @@ def loglikelihood_gp4ml(guess, E, Beta=False):
 
     ## calculate covariance matrix
     E.GP.makeA()
-    A = (E.GP.sigma**2)*E.GP.A   # NOTE: AVOID... MULTIPLY/DIVIDE SOME TERMS BY S2 BELOW?
+    s2 = E.GP.sigma**2
+    A = s2*E.GP.A   # NOTE: AVOID... MULTIPLY/DIVIDE SOME TERMS BY S2 BELOW?
 
     ## calculate LLH
     try:
@@ -63,7 +64,41 @@ def loglikelihood_gp4ml(guess, E, Beta=False):
         LLH = -0.5*(-temp - logdetA - np.log(linalg.det(Q)) - (n-q)*np.log(2.0*np.pi))
 
         if Beta: return B
-        return LLH
+
+        H_dot_B = E.Basis.H.dot(B).T  # H (H A^-1 H)^-1 H A^-1 y
+        
+        gradLLH = np.empty(guess.size)
+
+        for hp in range(guess.size):
+            ## wrt delta
+            if hp < E.GP.delta.size:
+                gradHP = E.GP.K.gradWrtDelta(E.Data.xT[:,hp], E.GP.delta[hp], E.GP.nugget, s2)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+            ## wrt nugget, if nugget is being trained
+            if hp == E.GP.delta.size and guess.size == E.GP.delta.size + 2:
+                gradHP = E.GP.K.gradWrtNugget(E.Data.xT, E.GP.nugget, s2)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+            ## wrt sigma
+            if hp == guess.size - 1:
+                #invA_gradHP = linalg.cho_solve(L, gradHP)
+                invA_gradHP = np.diag(np.ones(n))
+
+            sam = (invA_gradHP).dot(invA_H.dot(B))
+            gradLLH[hp] = -0.5* (\
+              - np.trace(invA_gradHP) \
+              + (E.Data.yT.T).dot(invA_gradHP).dot(invA_y) \
+              + ( - 2*E.Data.yT.T + H_dot_B ).dot(sam) \
+              + np.trace( linalg.cho_solve(K, E.Basis.H.T).dot(invA_gradHP).dot(invA_H) ) )
+
+
+        if debug == False:
+            return LLH, gradLLH
+        elif debug == "func":
+            return LLH
+        elif debug == "grad":
+            return gradLLH
+
+        #return LLH, gradLLH
 
     except np.linalg.linalg.LinAlgError as e:
         print("  WARNING: Matrix not PSD for", guess, ", not fitted.")
@@ -176,9 +211,9 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
         initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
         print("  Guess: ", initGuess)
         printProgBar(t, tries, prefix = 'Progress:')
-
+ 
         nonPSDfail = False
-        JAC = False
+        JAC = True
         try:
             if useConstraints == True:
                 res = minimize(LLH, guess, args=(E,),
@@ -188,6 +223,17 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
                         method = 'L-BFGS-B', jac=JAC)
         except TypeError as e:
             nonPSDfail = True
+
+        ## for checks on if function gradient is correct
+        debug_grad = True
+        if debug_grad:
+            #func_m = lambda x: self.loglikelihood_mucm(x, debug="func")
+            #grad_m = lambda x: self.loglikelihood_mucm(x, debug="grad")
+            func_g = lambda x: loglikelihood_gp4ml(x, E, debug="func")
+            grad_g = lambda x: loglikelihood_gp4ml(x, E, debug="grad")
+            func, grad = (func_g, grad_g) #if self.beliefs.mucm == 'T' else (func_m, grad_m)
+            print("  grad error initial guess:", check_grad(func, grad, guess))
+            print("  grad error optimized val:", check_grad(func, grad, res.x))
 
         ## check that we didn't fail by having non-PSD matrix
         if nonPSDfail == False:
