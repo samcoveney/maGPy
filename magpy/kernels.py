@@ -33,9 +33,8 @@ class RBFmucm():
 
     ## derivative wrt delta
     def gradWrtDelta(self, X, delta, nugget, s2):
-        N = X.size
         w = 1.0 / delta
-        f = _dist.pdist((X*w).reshape(N,1),'sqeuclidean')
+        f = _dist.pdist((X*w).reshape(X.size,1),'sqeuclidean')
         f = ((1.0-nugget)*s2)*f*self.expUT
         f = _dist.squareform(f)
         ## because of prefactor, diagonal will be zeros
@@ -43,7 +42,7 @@ class RBFmucm():
         return f
 
     ## derivative wrt nugget
-    def gradWrtNugget(self, X, nugget, s2):
+    def gradWrtNugget(self, nugget, s2):
         f = (0.5*(-nugget)*s2)*self.expUT
         f = _dist.squareform(f)
         ## don't add 1.0 onto the diagonal here 
