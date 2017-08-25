@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import pickle
+from magpy._utils import *
 
 ## progress bar
 def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, length = 20, fill = '█'):
@@ -98,11 +99,25 @@ class Wave:
         Imaxes = np.partition(self.I, -maxno)[:,-maxno]
 
         ## check cut-off, store indices of points matching condition
-        self.NIMP = np.argwhere(Imaxes < self.cm)
+        self.NIMP = np.argwhere(Imaxes < self.cm)[:,0]
         print("NIMP fraction:", 100*float(len(self.NIMP))/float(P), "%")
 
         return
 
+    ## return non-implausible points in original units
+    def getNIMP(self):
+        minmax = self.emuls[0].Data.minmax
+        if self.NIMP == []:
+            print("WARNING: non-implausible points must be found first with findNIMP()")
+            return
+
+        ## unscale the inputs
+        unscaledNIMP = np.empty([self.NIMP.shape[0], self.TESTS.shape[1]])
+        for i in range(self.TESTS.shape[1]):
+            unscaledNIMP[:,i] = \
+                self.TESTS[self.NIMP][:,i] * (minmax[i][1] - minmax[i][0]) + minmax[i][0]
+                              
+        return unscaledNIMP
 
 ## colormaps
 def myGrey():
@@ -228,7 +243,11 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         plt.tight_layout()
 
     else:
+        print("Unpickling plot in", filename, "...")
         fig, ax = pickle.load(open(filename,'rb'))  # load plot
+
+    pickle.dump([fig, ax], open(filename, 'wb'))  # save plot
+    # This is for Python 3 - py2 may need `file` instead of `open`
 
     ## plots points
     if points is not []:
@@ -237,10 +256,6 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             for s in gSets:
                 ax[s[1],s[0]].scatter(p[s[0]], p[s[1]], s=15, c='black')
                 ax[s[0],s[1]].scatter(p[s[0]], p[s[1]], s=15, c='black')
-
-    
-    pickle.dump([fig, ax], open(filename, 'wb'))  # save plot
-    # This is for Python 3 - py2 may need `file` instead of `open`
 
     plt.show()
     return
