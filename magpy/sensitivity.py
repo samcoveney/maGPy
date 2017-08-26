@@ -703,13 +703,18 @@ class Sensitivity:
         self.Sw[:]=(1.0-self.nugget)*self.Estar[:]*\
                 np.prod( self.Sw_b4_prod, axis=1 )
 
-    @timeit
     def Pw_calc(self):
-        for k in range( self.x.shape[0] ):
-            for l in range( self.x.shape[0] ):
-                self.Pw[k,l]=((1.0-self.nugget)**2)*\
-                    np.prod( (self.P1.dot(self.P_prod[k,l]))[self.wb] )*\
-                    np.prod( self.P_b4_prod[k,l,self.w] )
+        ## for loop
+        #for k in range( self.x.shape[0] ):
+        #    for l in range( self.x.shape[0] ):
+        #        self.Pw[k,l]=((1.0-self.nugget)**2)*\
+        #            np.prod( (self.P1.dot(self.P_prod[k,l]))[self.wb] )*\
+        #            np.prod( self.P_b4_prod[k,l,self.w] )
+        ## broadcast
+        SAM = np.einsum("ijk,kl" , self.P_prod, self.P1)
+        self.Pw=((1.0-self.nugget)**2)*\
+                np.prod( SAM[:,:,self.wb], axis=2 )*\
+                np.prod( self.P_b4_prod[:,:,self.w], axis=2 )
 
     def Tw_calc(self):
         Cww = np.diag(np.diag(self.C)[self.w])
