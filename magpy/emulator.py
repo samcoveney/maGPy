@@ -175,7 +175,7 @@ class Emulator:
     class Data():
         def __init__(self):
             self.xAll, self.yAll = None, None  # for all data, unscaled, shuffled
-            self.minmax = {}
+            self.minmax, self.minmaxScaled = {}, {}
             self.xT, self.yT, self.xV, self.yV = None, None, None, None  # scaled, T-V split
             self.activeRef = {}
 
@@ -221,6 +221,10 @@ class Emulator:
             for i in range(self.xAll.shape[1]):
                 xTemp[:,i] = (self.xAll[:,i]    - self.minmax[i][0])\
                           / (self.minmax[i][1] - self.minmax[i][0])
+
+            ## record minmax of the scaled inputs
+            for i in range(self.xAll.shape[1]):
+                self.minmaxScaled[i] = [ np.amin(xTemp[:,i]), np.amax(xTemp[:,i]) ]
 
             ## select active inputs
             active.sort()
