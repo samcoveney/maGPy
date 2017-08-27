@@ -135,7 +135,7 @@ class Sensitivity:
         print("\n*** Uncertainty measures ***")
         self.done['unc'] = True
 
-        self.w = [i for i in range(0,len(self.m))]
+        self.w = [i for i in range(len(self.m))]
 
         ############# R integrals #############
         self.Rh = np.append([1.0], np.array(self.m[self.w]))
@@ -149,37 +149,73 @@ class Sensitivity:
         mw_mw = np.outer( self.m[self.w] , self.m[self.w].T )
         Bww = np.diag( np.diag(self.B)[self.w] )
         mw_mw_Bww = mw_mw + np.linalg.inv(Bww)
-        for i in range(0,len(self.w)):
-            for j in range(0,len(self.w)):
+        for i in range(len(self.w)):
+            for j in range(len(self.w)):
                 self.Rhh[1+self.w[i]][1+self.w[j]] = mw_mw_Bww[i][j]
 
         ## this code only works when self.w is complete set of inputs
         self.Rt = np.zeros([self.x[:,0].size])
-        self.Rht = np.zeros([1+len(self.w) , self.x[:,0].size])
-        for k in range(0, self.x[:,0].size):
-            mpk = np.linalg.solve(\
-            2.0*self.C+self.B , 2.0*self.C.dot(self.x[k]) + self.B.dot(self.m) )
-            Qk = 2.0*(mpk-self.x[k]).T.dot(self.C).dot(mpk-self.x[k])\
-                  + (mpk-self.m).T.dot(self.B).dot(mpk-self.m)
-            self.Rt[k] = (1.0-self.nugget)*np.sqrt(\
-                np.linalg.det(self.B)/np.linalg.det(2.0*self.C+self.B))*\
-                np.exp(-0.5*Qk)
-            Ehx = np.append([1.0], mpk)
-            self.Rht[:,k] = self.Rt[k] * Ehx
+        self.Rht = np.zeros([1+len(self.w) , self.x.shape[0]])
+        ## for loop
+        #for k in range(0, self.x[:,0].size):
+        #    mpk = np.linalg.solve(\
+        #    2.0*self.C+self.B , 2.0*self.C.dot(self.x[k]) + self.B.dot(self.m) )
+        #    Qk = 2.0*(mpk-self.x[k]).T.dot(self.C).dot(mpk-self.x[k])\
+        #          + (mpk-self.m).T.dot(self.B).dot(mpk-self.m)
+        #    self.Rt[k] = (1.0-self.nugget)*np.sqrt(\
+        #        np.linalg.det(self.B)/np.linalg.det(2.0*self.C+self.B))*\
+        #        np.exp(-0.5*Qk)
+        #    Ehx = np.append([1.0], mpk)
+        #    self.Rht[:,k] = self.Rt[k] * Ehx
 
-        self.Rtt = np.zeros([self.x[:,0].size , self.x[:,0].size])
-        for k in range(0, self.x[:,0].size):
-            for l in range(0, self.x[:,0].size):
-                mpkl = np.linalg.solve(\
-                    4.0*self.C+self.B ,\
-                    2.0*self.C.dot(self.x[k]) + 2.0*self.C.dot(self.x[l])\
-                    + self.B.dot(self.m) )
-                Qkl = 2.0*(mpkl-self.x[k]).T.dot(self.C).dot(mpkl-self.x[k])\
-                    + 2.0*(mpkl-self.x[l]).T.dot(self.C).dot(mpkl-self.x[l])\
-                    + (mpkl-self.m).T.dot(self.B).dot(mpkl-self.m)
-                self.Rtt[k,l] = ((1.0-self.nugget)**2)*np.sqrt(\
-                    np.linalg.det(self.B)/np.linalg.det(4.0*self.C+self.B))*\
-                    np.exp(-0.5*Qkl)
+        #self.Rtt = np.zeros([self.x[:,0].size , self.x[:,0].size])
+        #for k in range(0, self.x[:,0].size):
+        #    for l in range(0, self.x[:,0].size):
+        #        mpkl = np.linalg.solve(\
+        #            4.0*self.C+self.B ,\
+        #            2.0*self.C.dot(self.x[k] + self.x[l])\
+        #            + self.B.dot(self.m) )
+        #        Qkl = 2.0*(mpkl-self.x[k]).T.dot(self.C).dot(mpkl-self.x[k])\
+        #            + 2.0*(mpkl-self.x[l]).T.dot(self.C).dot(mpkl-self.x[l])\
+        #            + (mpkl-self.m).T.dot(self.B).dot(mpkl-self.m)
+        #        self.Rtt[k,l] = ((1.0-self.nugget)**2)*np.sqrt(\
+        #            np.linalg.det(self.B)/np.linalg.det(4.0*self.C+self.B))*\
+        #            np.exp(-0.5*Qkl)
+        ## broadcasting
+        TEMP = np.einsum("ij,jl", self.x, 2.0*self.C) + self.B.dot(self.m)
+        mpk = np.linalg.solve(2.0*self.C+self.B , TEMP.T ).T
+        DIFF = mpk-self.x[:]
+        PAT = np.einsum('ij,ij->i', DIFF, DIFF.dot(self.C))
+        DIFF2 = mpk-self.m
+        PAT2 = np.einsum('ij,ij->i', DIFF2, DIFF2.dot(self.B))
+        Qk = 2.0*PAT + PAT2
+        self.Rt[:] = (1.0-self.nugget)*np.sqrt(\
+            np.linalg.det(self.B)/np.linalg.det(2.0*self.C+self.B))*\
+            np.exp(-0.5*Qk)
+        Ehx = np.c_[np.ones(self.x.shape[0]), mpk]
+        self.Rht = np.einsum("ij,ij->ji", self.Rt[:,None], Ehx)
+
+        self.Rtt = np.zeros([self.x.shape[0], self.x.shape[0]])
+        x_k_pl_l = (self.x[:,None] + self.x[:])
+        TEMP = np.einsum("ijk,kl", x_k_pl_l, 2.0*self.C) + self.B.dot(self.m)
+        mpkl = np.linalg.solve(4.0*self.C+self.B , TEMP[:,:,:,None])
+        mpkl = np.squeeze(mpkl, axis=3)
+
+        XDIFF_K = (mpkl[:,:] - self.x[:,None])
+        XDIFF_L = (mpkl[:,:] - self.x[None,:])
+
+        TEMP2 = np.einsum("ijk,kl" , mpkl-self.m, self.B)
+        TEMP2 = np.einsum("ijk,ijk->ij" , TEMP2, mpkl-self.m)
+
+        XDIFF_K_T = np.einsum("ijk,kl" , XDIFF_K, self.C)
+        XDIFF_K_T = 2.0*np.einsum("ijk,ijk->ij" , XDIFF_K_T, XDIFF_K)
+        XDIFF_L_T = np.einsum("ijk,kl" , XDIFF_L, self.C)
+        XDIFF_L_T = 2.0*np.einsum("ijk,ijk->ij" , XDIFF_L_T, XDIFF_L)
+        
+        Qkl = XDIFF_K_T + XDIFF_L_T + TEMP2
+        self.Rtt = ((1.0-self.nugget)**2)*np.sqrt(\
+            np.linalg.det(self.B)/np.linalg.det(4.0*self.C+self.B))*\
+            np.exp(-0.5*Qkl)
 
         ############# U integrals #############
         num=len(self.m)
@@ -684,14 +720,13 @@ class Sensitivity:
         #            4.0*(self.C*self.C).dot( (self.x[k]-self.x).T**2 )\
         #            +2.0*(self.C*self.B).dot( (self.P3[k]+self.P3).T )) ) )).T
         ## broadcasting
-        Ax = (self.x[:,None] - self.x[:]).swapaxes(1,2)
-        AP3 = (self.P3[:,None] + self.P3[:]).swapaxes(1,2)
-        self.P_prod = np.exp(-self.P2.dot( (AP3) )).T
-
-        TEMP1 = 2.0*(self.C*self.B).dot( (AP3) )
-        TEMP2 = 4.0*(self.C*self.C).dot( (Ax)**2 )
-        TEMP3 = np.exp( -self.P5.dot((TEMP1 + TEMP2).swapaxes(0,1)) )
-        self.P_b4_prod = (self.P4.dot(TEMP3.swapaxes(0,1))).T
+        Ax = (self.x[:,None] - self.x[:])
+        AP3 = (self.P3[:,None] + self.P3[:])
+        self.P_prod = np.exp( -np.einsum("ijk,kl", AP3 , self.P2) )
+        TEMP1 = np.einsum("ijk,kl", AP3, (2.0*(self.C*self.B) ))
+        TEMP2 = np.einsum("ijk,kl", Ax**2, 4.0*(self.C*self.C) )
+        TEMP3 = np.exp( -np.einsum("ijk,kl", TEMP1+TEMP2 , self.P5) )
+        self.P_b4_prod = np.einsum("ijk,kl", TEMP3, self.P4)
 
 
     def Uw_calc(self):
@@ -710,18 +745,27 @@ class Sensitivity:
         #        self.Pw[k,l]=((1.0-self.nugget)**2)*\
         #            np.prod( (self.P1.dot(self.P_prod[k,l]))[self.wb] )*\
         #            np.prod( self.P_b4_prod[k,l,self.w] )
-        ## broadcast
+        ## broadcasting
         SAM = np.einsum("ijk,kl" , self.P_prod, self.P1)
         self.Pw=((1.0-self.nugget)**2)*\
                 np.prod( SAM[:,:,self.wb], axis=2 )*\
                 np.prod( self.P_b4_prod[:,:,self.w], axis=2 )
 
     def Tw_calc(self):
+        ## for loop
+        #Cww = np.diag(np.diag(self.C)[self.w])
+        #for k in range(self.x.shape[0]):
+        #    val  = np.prod( self.Tk_b4_prod[k][self.wb] )
+        #    self.Tw[k] = (1.0-self.nugget)*val\
+        #      *np.exp(-0.5*(self.xw-self.x[k][self.w]).T\
+        #       .dot(2.0*Cww).dot(self.xw-self.x[k][self.w]))
+        ## broadcasting
         Cww = np.diag(np.diag(self.C)[self.w])
-        for k in range(0, self.x[:,0].size):
-            val  = np.prod( self.Tk_b4_prod[k][self.wb] )
-            self.Tw[k] = (1.0-self.nugget)*val\
-              *np.exp(-0.5*(self.xw-self.x[k][self.w]).T.dot(2.0*Cww).dot(self.xw-self.x[k][self.w]))
+        val  = np.prod( self.Tk_b4_prod[:,self.wb], axis=1 )[:,None]
+        XDIFF = (self.xw-self.x[:,self.w])
+        TEMP = np.einsum("ij,ij->i", XDIFF, XDIFF.dot(2.0*Cww))[:,None]
+        self.Tw[:] = (1.0-self.nugget)*\
+                np.einsum("ij,ij->i", val, np.exp(-0.5*TEMP) )
 
     def Rw_calc(self):
         Rwno1 = np.array(self.m)
