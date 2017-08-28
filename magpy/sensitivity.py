@@ -131,6 +131,7 @@ class Sensitivity:
         ### for saving to file -- set to true when functions have run
         self.done = {'unc': False, "sen": False, "ME": False, "int": False, "TEV": False}
 
+    #@timeit
     def uncertainty(self):
         print("\n*** Uncertainty measures ***")
         self.done['unc'] = True
@@ -182,13 +183,15 @@ class Sensitivity:
         #            np.linalg.det(self.B)/np.linalg.det(4.0*self.C+self.B))*\
         #            np.exp(-0.5*Qkl)
         ## broadcasting
-        TEMP = np.einsum("ij,jl", self.x, 2.0*self.C) + self.B.dot(self.m)
-        mpk = np.linalg.solve(2.0*self.C+self.B , TEMP.T ).T
+        # this line gets used again in next broadcasting section...
+        TEMP_SAVE = np.einsum("ij,jl", self.x, 2.0*self.C) + self.B.dot(self.m)
+        mpk = np.linalg.solve(2.0*self.C+self.B , TEMP_SAVE.T ).T
         DIFF = mpk-self.x[:]
-        PAT = np.einsum('ij,ij->i', DIFF, DIFF.dot(self.C))
+        PAT_SAVE = np.einsum('ij,ij->i', DIFF, DIFF.dot(self.C))
+
         DIFF2 = mpk-self.m
         PAT2 = np.einsum('ij,ij->i', DIFF2, DIFF2.dot(self.B))
-        Qk = 2.0*PAT + PAT2
+        Qk = 2.0*PAT_SAVE + PAT2
         self.Rt[:] = (1.0-self.nugget)*np.sqrt(\
             np.linalg.det(self.B)/np.linalg.det(2.0*self.C+self.B))*\
             np.exp(-0.5*Qk)
@@ -201,18 +204,15 @@ class Sensitivity:
         mpkl = np.linalg.solve(4.0*self.C+self.B , TEMP[:,:,:,None])
         mpkl = np.squeeze(mpkl, axis=3)
 
-        XDIFF_K = (mpkl[:,:] - self.x[:,None])
-        XDIFF_L = (mpkl[:,:] - self.x[None,:])
-
         TEMP2 = np.einsum("ijk,kl" , mpkl-self.m, self.B)
         TEMP2 = np.einsum("ijk,ijk->ij" , TEMP2, mpkl-self.m)
 
+        XDIFF_K = (mpkl[:,:] - self.x[:,None])
         XDIFF_K_T = np.einsum("ijk,kl" , XDIFF_K, self.C)
         XDIFF_K_T = 2.0*np.einsum("ijk,ijk->ij" , XDIFF_K_T, XDIFF_K)
-        XDIFF_L_T = np.einsum("ijk,kl" , XDIFF_L, self.C)
-        XDIFF_L_T = 2.0*np.einsum("ijk,ijk->ij" , XDIFF_L_T, XDIFF_L)
         
-        Qkl = XDIFF_K_T + XDIFF_L_T + TEMP2
+        Qkl = (XDIFF_K_T + XDIFF_K_T.T) + TEMP2
+
         self.Rtt = ((1.0-self.nugget)**2)*np.sqrt(\
             np.linalg.det(self.B)/np.linalg.det(4.0*self.C+self.B))*\
             np.exp(-0.5*Qkl)
@@ -239,20 +239,51 @@ class Sensitivity:
         self.Uht = np.zeros([1+2*len(self.w) , self.x[:,0].size])
         Ufact = ((1.0-self.nugget)**2)*\
             np.linalg.det(self.B)/np.sqrt(np.linalg.det(Bboldk))
-        for k in range(0, self.x[:,0].size):
-            mpkvec = np.append( (self.B.dot(self.m)).T ,\
-                (2.0*self.C.dot(self.x[k]) + self.B.dot(self.m)).T )
-            mpk = np.linalg.solve(Bboldk, mpkvec)
-            mpk1 = mpk[0:len(self.m)]
-            mpk2 = mpk[len(self.m):2*len(self.m)]
-            Qku = 2.0*(mpk2-self.x[k]).T.dot(self.C).dot(mpk2-self.x[k])\
-                + 2.0*(mpk1-mpk2).T.dot(self.C).dot(mpk1-mpk2)\
-                + (mpk1-self.m).T.dot(self.B).dot(mpk1-self.m)\
-                + (mpk2-self.m).T.dot(self.B).dot(mpk2-self.m)
-            self.Ut[k] = Ufact * np.exp(-0.5*Qku)
-            Ehx = np.append([1.0], mpk1) ## again, not sure of value...
-            Ehx = np.append(Ehx, mpk2)
-            self.Uht[:,k] = self.Ut[k] * Ehx
+        ## for loop
+        #for k in range(0, self.x[:,0].size):
+        #    mpkvec = np.append( (self.B.dot(self.m)).T ,\
+        #        (2.0*self.C.dot(self.x[k]) + self.B.dot(self.m)).T )
+        #    mpk = np.linalg.solve(Bboldk, mpkvec)
+        #    mpk1 = mpk[0:len(self.m)]
+        #    mpk2 = mpk[len(self.m):2*len(self.m)]
+        #    Qku = 2.0*(mpk2-self.x[k]).T.dot(self.C).dot(mpk2-self.x[k])\
+        #        + 2.0*(mpk1-mpk2).T.dot(self.C).dot(mpk1-mpk2)\
+        #        + (mpk1-self.m).T.dot(self.B).dot(mpk1-self.m)\
+        #        + (mpk2-self.m).T.dot(self.B).dot(mpk2-self.m)
+        #    self.Ut[k] = Ufact * np.exp(-0.5*Qku)
+        #    Ehx = np.append([1.0], mpk1) ## again, not sure of value...
+        #    Ehx = np.append(Ehx, mpk2)
+        #    self.Uht[:,k] = self.Ut[k] * Ehx
+        ## broadcasting
+        ## THIS FIRST LINE MATCHES ONE EARLIER
+        mpkvec = np.c_[np.zeros(self.x.shape), TEMP_SAVE]
+        mpkvec[:,0:self.m.size] = self.B.dot(self.m)
+        mpk = np.linalg.solve(Bboldk, mpkvec.T).T
+        mpk1 = mpk[:,0:len(self.m)]
+        mpk2 = mpk[:,len(self.m):2*len(self.m)]
+
+        # 2.0*(mpk2-self.x[k]).T.dot(self.C).dot(mpk2-self.x[k])
+        XDIFF_K = (mpk2[:] - self.x[:])
+        XDIFF_K_T = np.einsum("ij,jl" , XDIFF_K, self.C)
+        XDIFF_K_T = 2.0*np.einsum("ij,ij->i" , XDIFF_K_T, XDIFF_K)
+
+        # 2.0*(mpk1-mpk2).T.dot(self.C).dot(mpk1-mpk2)\
+        MPKDIFF_K = (mpk1[:] - mpk2[:])
+        MPKDIFF_K_T = np.einsum("ij,jl" , MPKDIFF_K, self.C)
+        MPKDIFF_K_T = 2.0*np.einsum("ij,ij->i" , MPKDIFF_K_T, MPKDIFF_K)
+
+        # (mpk1-self.m).T.dot(self.B).dot(mpk1-self.m)\
+        MPK1_M, MPK2_M = (mpk1-self.m), (mpk2-self.m)
+        MPK1_M_T = np.einsum("ij,jl" , MPK1_M, self.B)
+        MPK1_M_T  = np.einsum("ij,ij->i" , MPK1_M_T , MPK1_M)
+        MPK2_M_T = np.einsum("ij,jl" , MPK2_M, self.B)
+        MPK2_M_T  = np.einsum("ij,ij->i" , MPK2_M_T , MPK2_M)
+
+        Qku = XDIFF_K_T + MPKDIFF_K_T + MPK1_M_T + MPK2_M_T
+
+        self.Ut = Ufact * np.exp(-0.5*Qku)
+        Ehx = np.c_[np.ones(mpk1.shape[0]), mpk1, mpk2] ## not sure of value...
+        self.Uht[:] = (self.Ut[:,None] * Ehx).T
 
         Bboldkl = np.zeros([2*num , 2*num])
         Bboldkl[0:num, 0:num] = 4.0*self.C+self.B
@@ -261,19 +292,38 @@ class Sensitivity:
         Bboldkl[num:2*num, 0:num] = -2.0*self.C
         self.Utt = np.zeros([self.x[:,0].size , self.x[:,0].size])
         Ufact2 = ((1.0-self.nugget)**3)*np.linalg.det(self.B)/np.sqrt(np.linalg.det(Bboldkl))
-        for k in range(0, self.x[:,0].size):
-            mpk = np.linalg.solve(\
-                2.0*self.C+self.B , 2.0*self.C.dot(self.x[k])+self.B.dot(self.m) )
-            Qk = 2.0*(mpk-self.x[k]).T.dot(self.C).dot(mpk-self.x[k])\
-                  + (mpk-self.m).T.dot(self.B).dot(mpk-self.m)
-            for l in range(0, self.x[:,0].size):
-                mpl = np.linalg.solve(\
-                    2.*self.C+self.B,2.*self.C.dot(self.x[l])+self.B.dot(self.m))
-                Ql = 2.0*(mpl-self.x[l]).T.dot(self.C).dot(mpl-self.x[l])\
-                      + (mpl-self.m).T.dot(self.B).dot(mpl-self.m)
 
-                self.Utt[k,l] = Ufact2 * np.exp(-0.5*(Qk+Ql))
-        self.Utild = 1
+        ## for loop
+        #for k in range(0, self.x[:,0].size):
+        #    mpk = np.linalg.solve(\
+        #      2.0*self.C+self.B, 2.0*self.C.dot(self.x[k])+self.B.dot(self.m) )
+        #    Qk = 2.0*(mpk-self.x[k]).T.dot(self.C).dot(mpk-self.x[k])\
+        #          + (mpk-self.m).T.dot(self.B).dot(mpk-self.m)
+        #    for l in range(0, self.x[:,0].size):
+        #        mpl = np.linalg.solve(\
+        #            2.*self.C+self.B,2.*self.C.dot(self.x[l])+self.B.dot(self.m))
+        #        Ql = 2.0*(mpl-self.x[l]).T.dot(self.C).dot(mpl-self.x[l])\
+        #              + (mpl-self.m).T.dot(self.B).dot(mpl-self.m)
+
+        #        self.Utt[k,l] = Ufact2 * np.exp(-0.5*(Qk+Ql))
+
+        ## broadcasting
+        ## THIS FIRST LINE MATCHES ONE EARLIER
+        #TEMP = np.einsum("ij,jl", self.x, 2.0*self.C) + self.B.dot(self.m)
+        ## also matches earlier...
+        #mpk = np.linalg.solve(2.0*self.C+self.B , TEMP.T ).T
+        ## earlier match..? NOT FOR XDIFF_K NAMED ABOVE, BUT LIKELY
+        #XDIFF_K = (mpk[:] - self.x[:])
+        #XDIFF_K_T = np.einsum("ij,jl" , XDIFF_K, self.C)
+        #XDIFF_K_T = 2.0*np.einsum("ij,ij->i" , XDIFF_K_T, XDIFF_K)
+        #Qk = XDIFF_K_T
+
+        ## already calculated this earlier -  don't need for loop or broadcast
+        Qk = PAT_SAVE
+        Qk_plus_Ql = (Qk[:] + Qk[:,None])
+        self.Utt = Ufact2 * np.exp(-0.5*(Qk_plus_Ql))
+
+        self.Utild = 1 ## must be set here
 
         ############# S integrals #############
         Smat = np.zeros([3*num , 3*num])
