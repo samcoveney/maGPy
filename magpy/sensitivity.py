@@ -22,7 +22,7 @@ def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
 
     '''
 
-    print("\n*** Creating sensitivity table ***")
+    print("== Sensitivity table ==")
 
     # make sure the input is a list
     try:
@@ -133,7 +133,7 @@ class Sensitivity:
 
     #@timeit
     def uncertainty(self):
-        print("\n*** Uncertainty measures ***")
+        print("== Uncertainty measures ==")
         self.done['unc'] = True
 
         self.w = [i for i in range(len(self.m))]
@@ -364,9 +364,9 @@ class Sensitivity:
 
         self.uEV = (self.I1-self.uV) + (self.I2 -self.uE**2)
         
-        print("E*[ E[f(X)] ]  :",self.uE)
-        print("var*[ E[f(X)] ]:",self.uV)
-        print("E*[ var[f(X)] ]:",self.uEV)
+        print("  E*[ E[f(X)] ]  :",self.uE)
+        print("  var*[ E[f(X)] ]:",self.uV)
+        print("  E*[ var[f(X)] ]:",self.uEV)
 
 
     #### utility functions to simplify code ####
@@ -402,7 +402,7 @@ class Sensitivity:
         self.Rw_calc()
 
     def main_effect(self, plot=False, points=100, customKey=[], customLabels=[], plotShrink=0.9, w=[], black_white=False):
-        print("\n*** Main effect measures ***")
+        if plot == True: print("== Main effect measures ==")
         self.done["ME"] = True
         self.effect = np.zeros([self.m.size , points])
         self.mean_effect = np.zeros([self.m.size , points])
@@ -432,7 +432,7 @@ class Sensitivity:
         cn = 0 
         self.b4_input_loop()
         for P in w:
-            print("Main effect measures for input", P, "range", self.minmax[P])
+            if plot == True: print("  Input", P, "range", self.minmax[P])
             self.setup_w_wb(P)
             self.af_w_wb_def()
 
@@ -486,18 +486,18 @@ class Sensitivity:
                 except IndexError as e:
                     plt.ylabel("Main Effect")
 
-            print("Plotting main effects...")
+            print("  Plotting main effects...")
             plt.show()
 
 
     def interaction_effect(self, i, j, points = 25, customLabels=[]):
-        print("\n*** Interaction effects ***")
+        print("== Interaction effects ==")
         self.done["int"] = True
         self.interaction = np.zeros([points , points])
 
         ## gotta redo main effect to do the interaction...
         try:
-            print("Recalculating main effect with", points, "points...")
+            #print("  (Recalc. main effect with", points, "points)")
             self.main_effect(plot=False, points=points, w=[i,j])
         except IndexError as e:
             print("ERROR: invalid input indices. Return None.")
@@ -518,7 +518,7 @@ class Sensitivity:
         # range of the inputs
         ra_i = self.minmax[i]
         ra_j = self.minmax[j]
-        print("\nCalculating", points*points, "interaction effects...")
+        #print("\nCalculating", points*points, "interaction effects...")
         icount = 0 # counts index for each value of xwi we try
         for xwi in np.linspace(ra_i[0],ra_i[1],points): ## value of xw[i]
             jcount = 0 ## j counts index for each value of xwj we try
@@ -574,7 +574,7 @@ class Sensitivity:
     ##### isn't clear that this is correct results, since no MUCM examples...
     def totaleffectvariance(self):
         self.done["TEV"] = True
-        print("\n*** Calculate total effect variance ***")
+        print("== Total effect variance ==")
         self.senseindexwb = np.zeros([self.m.size])
         self.EVTw = np.zeros([self.m.size])
 
@@ -582,7 +582,7 @@ class Sensitivity:
 
         #### to get MUCM ans, assume MUCM wrong, and this value is uEV
         self.EVf = self.uEV
-        print("E*[ var[f(X)] ]:",self.EVf)
+        print("  E*[ var[f(X)] ]:",self.EVf)
 
         self.initialise_matrices()
         
@@ -630,11 +630,11 @@ class Sensitivity:
             self.senseindexwb[P] = self.EVaaa
 
             self.EVTw[P] = self.EVf - self.EVaaa
-            print("E(V[T" + str(P) + "]):" , self.EVTw[P])
+            print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
 
 
     def sensitivity(self):
-        print("\n*** Calculate sensitivity indices ***")
+        print("== Sensitivity indices ==")
         self.done["sen"] = True
         self.senseindex = np.zeros([self.m.size])
 
@@ -677,13 +677,13 @@ class Sensitivity:
 
 
             if self.done["unc"]:
-                print("E(V" + str(self.w) +")/EV:", self.EVint/self.uEV)
+                print("  E(V" + str(self.w) +")/EV:", self.EVint/self.uEV)
             else:
-                print("E(V" + str(self.w) +"):", self.EVint)
+                print("  E(V" + str(self.w) +"):", self.EVint)
             self.senseindex[P] = self.EVint
 
         if self.done["unc"]:
-            print("Sum of Sensitivities:" , np.sum(self.senseindex/self.uEV))
+            print("  SUM:" , np.sum(self.senseindex/self.uEV))
 
 
     def UPSQRT_const(self):
@@ -824,7 +824,7 @@ class Sensitivity:
 
         
     def to_file(self, filename):
-        print("Sensitivity & Uncertainty results to file...")
+        print("== Results to file ==")
         f=open(filename, 'w')
 
         if self.done["unc"] == True :
