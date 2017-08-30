@@ -85,10 +85,10 @@ def loglikelihood_gp4ml(guess, E, Beta=False, debug=False):
             return gradLLH
 
     except np.linalg.linalg.LinAlgError as e:
-        print("  WARNING: Matrix not PSD for", guess, ", not fitted.")
+        print("  WARNING: Matrix not PSD for", guess, ", not fit.")
         return None
     except ValueError as e:
-        print("  WARNING: Ill-conditioned matrix for", guess, ", not fitted.")
+        print("  WARNING: Ill-conditioned matrix for", guess, ", not fit.")
         return None
 
 
@@ -162,7 +162,10 @@ def loglikelihood_mucm(guess, E, SigmaBeta=False, debug=False):
             return gradLLH
 
     except np.linalg.linalg.LinAlgError as e:
-        print("  WARNING: Matrix not PSD for", guess, ", not fitted.")
+        print("  WARNING: Matrix not PSD for", guess, ", not fit.")
+        return None
+    except ValueError as e:
+        print("  WARNING: Ill-conditioned matrix for", guess, ", not fit.")
         return None
 
 
@@ -211,14 +214,14 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
     ## guess loop
     guess = np.zeros(len(boundsTemp))
     firstTry, bestMin = True, 10000000.0
-    printProgBar(0, tries, prefix = 'Progress:', suffix = '')
+    #printProgBar(0, tries, prefix = 'Progress:', suffix = '')
     for t in range(tries):
 
         for i,b in enumerate(boundsTemp):
             guess[i] = E.GP.K.transform(b[0]+(b[1]-b[0])*np.random.rand())
  
         initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
-        print("  Guess: ", initGuess)
+        print("\n  Guess: ", initGuess)
         printProgBar(t, tries, prefix = 'Progress:')
  
         nonPSDfail = False
@@ -227,10 +230,11 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
                 res = minimize(LLH, guess, args=(E,),
                         method = 'L-BFGS-B', jac=True, bounds=constraintsTransform)
             else:
-                res = minimize(LLH, guess, args=(E,), method = 'BFGS', jac=True)
+                #res = minimize(LLH, guess, args=(E,), method = 'BFGS', jac=True)
+                res = minimize(LLH, guess, args=(E,), method = 'L-BFGS-B', jac=True)
 
             ## for checks on if function gradient is correct
-            debugGrad = False
+            debugGrad = True
             if debugGrad:
                 func_m = lambda x: loglikelihood_mucm(x, E, debug="func")
                 grad_m = lambda x: loglikelihood_mucm(x, E, debug="grad")
@@ -245,21 +249,24 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
 
         ## check that we didn't fail by having non-PSD matrix
         if nonPSDfail == False:
+            if res.nfev < 5: print("  WARNING: Only", res.nfev, "iterations, be suspicious.")
             notFit = True if res.nfev == 1 else False # check >1 iteration
 
-            if notFit:  print("  WARNING: Only 1 iteration, not fitted.")
-            if res.success == False:  print("  WARNING: Bad termination for, not fitted.")
+            if notFit:  print("  WARNING: Only 1 iteration, not fit.")
+            if res.success == False:
+                print("  WARNING: Bad termination for", E.GP.K.untransform(guess), "not fit.")
             if message: print(res, "\n")
 
             ## result of fit
-            HP = np.around(E.GP.K.untransform(res.x),decimals=4)
-            print("  => HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
+            if notFit == False and res.success == True:
+                HP = np.around(E.GP.K.untransform(res.x),decimals=4)
+                print("  => HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
                 
-            ## set best result
-            if (res.fun < bestMin or firstTry)\
-              and notFit == False and res.success == True:
-                bestMin, bestHP = res.fun, E.GP.K.untransform(res.x)
-                firstTry = False
+                ## set best result
+                if (res.fun < bestMin or firstTry)\
+                  and notFit == False and res.success == True:
+                    bestMin, bestHP = res.fun, E.GP.K.untransform(res.x)
+                    firstTry = False
  
     printProgBar(tries, tries, prefix = 'Progress:')
 
