@@ -137,7 +137,7 @@ def odpcolormap():
 
 
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, globalColorbar=False):
+def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = []):
 
     ## make list of all the active indices across all emulators
     active = []
@@ -146,6 +146,15 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             if a not in active: active.append(a)
     active.sort()
     print("ACTIVE:", active)
+
+    ## restrict to smaller set of active indices
+    if activeId != []:
+        for a in activeId:
+            if a not in active:
+                print("ERROR: activeId", a, "not an active emulator index")
+                return
+        active = activeId
+        active.sort()
 
     ## reference global index into subplot index
     pltRef = {}
@@ -206,7 +215,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
               extent=ex,
               linewidths=linewidths, mincnt=1)
 
-            if globalColorbar == False:
+            if globalColorbar == False and colorbar == True:
                 plt.colorbar(im_imp, ax=impPlot)
                 plt.colorbar(im_odp, ax=odpPlot)
 
@@ -221,7 +230,9 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             printProgBar(i+1, len(gSets), prefix = 'Progress:', suffix = '')
 
         ## global colorbars
-        if globalColorbar == True:
+        if globalColorbar == True and odpMax == None:
+            print("WARNING: odpMax must be set to use globalColorBar")
+        if globalColorbar == True and odpMax != None:
             plt.draw()
             p0 = ax[0,0].get_position().get_points().flatten()
             p1 = ax[rc-1,rc-1].get_position().get_points().flatten()
@@ -240,7 +251,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             a.set(adjustable='box-forced', aspect='equal')
             #a.set_xticks([]); a.set_yticks([]); a.set_aspect('equal')
 
-        plt.tight_layout()
+        #plt.tight_layout()
 
     else:
         print("Unpickling plot in", filename, "...")
@@ -254,8 +265,8 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         print("Plotting points as well...")
         for p in points:
             for s in gSets:
-                ax[s[1],s[0]].scatter(p[s[0]], p[s[1]], s=15, c='black')
-                ax[s[0],s[1]].scatter(p[s[0]], p[s[1]], s=15, c='black')
+                ax[pltRef[s[1]],pltRef[s[0]]].scatter(p[s[0]], p[s[1]], s=15, c='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(p[s[0]], p[s[1]], s=15, c='black')
 
     plt.show()
     return
