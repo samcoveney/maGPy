@@ -3,11 +3,18 @@
 import numpy as np
 from scipy import linalg
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 from cycler import cycler
+import pickle
 
 from magpy._utils import *
 
-def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
+## colormaps
+def myGrey():
+#    return '#696988'
+    return '#FFFFFF'
+
+def sense_table(E_list, sense_list, inputNames=[], outputNames=[], rowHeight=6):
     '''
     Create a table plot of sensitivity indices. Rows are sensitivity instances (presumably initialised with different trained emulators), columns are input dimensions. Example use: build a different emulator for every output using all inputs and plot a table showing the sensitivity of each output to each input. Return None.
 
@@ -32,14 +39,27 @@ def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
               "Return None.")
         return None
 
-    rows = len(sense_list)
-    cols = len(sense_list[0].m) + 1
+    ## make list of all the active indices across all emulators
+    active = []
+    for e in E_list:
+        for a in e.Data.active:
+            if a not in active: active.append(a)
+    active.sort()
+    print("ACTIVE:", active)
+
+    ## reference global index into table column
+    pltRef = {}
+    for count, key in enumerate(active): pltRef[key] = count
+    print("PLTREF:", pltRef)
+
+    ## enough rows and cols for all active features and emulators
+    rows, cols = len(sense_list), len(active) + 1
 
     # ensure same number of inputs for each emulator
-    for s in sense_list:
-        if len(s.m) != cols - 1:
-            print("Each emulator must be built with the same number of inputs.")
-            return None
+    #for s in sense_list:
+    #    if len(s.m) != cols - 1:
+    #        print("Each emulator must be built with the same number of inputs.")
+    #        return None
 
     # if required routines haven't been run yet, then run them
     for s in sense_list:
@@ -50,21 +70,27 @@ def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
 
     # name the rows and columns
     if inputNames == []:
-        inputNames = ["input " + str(i) for i in range(cols-1)]
+        inputNames = ["x" + str(a) for a in active]
     inputNames.append("Sum")
     if outputNames == []:
-        outputNames = ["output " + str(i) for i in range(rows)]
+        outputNames = ["y" + str(r) for r in range(rows)]
 
     cells = np.zeros([rows, cols])
+    cells[:] = -1.0
     # iterate over rows of the sense_table
-    si = 0
-    for s in sense_list:
-        cells[si,0:cols-1] = s.senseindex/s.uEV
-        cells[si,cols-1] = np.sum(s.senseindex/s.uEV)
-        si = si + 1
-    
+    for r, s in enumerate(sense_list):
+        for a in E_list[r].Data.active:
+            cells[r,pltRef[a]] = 100*s.senseindex[E_list[r].Data.activeRef[a]]/s.uEV
+        cells[r,cols-1] = 100*np.sum(s.senseindex/s.uEV)
+
+    ## set nan values to -1.0
+    whereNAN = np.isnan(cells)
+    cells[whereNAN] = -1.0
+
     # a way to format the numbers in the table
-    tab_2 = [['%.3f' % j for j in i] for i in cells]
+    cellTxt = lambda x: '%3d %%' % x if x > 0.0 else ''
+    tab_2 = [[cellTxt(j) for j in i] for i in cells]
+    #tab_2 = [['%3d %%' % j for j in i] for i in cells]
 
     ## create the sensitivity table
 
@@ -73,10 +99,15 @@ def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
     fig = plt.figure(figsize=(16,8))
     ax = fig.add_subplot(111, frameon=False, xticks = [], yticks = [])
 
-    # table color and colorbar
+    ## table color and colorbar
+    ## alternative method to set < 0.0 cell color
     #img = plt.imshow(cells, cmap="hot")
-    img = plt.imshow(cells, cmap="hot", vmin=0.0, vmax=1.0)
-    #plt.colorbar()
+    #CMAP = plt.get_cmap("hot")
+    #CMAP.set_under(color=myGrey())
+    #img = plt.imshow(cells, cmap=CMAP, vmin=0.0, vmax=100.0)
+    ## mask cells set to < 0.0 (i.e. input not active)
+    cells = np.ma.masked_array(cells, cells < 0.0)
+    img = plt.imshow(cells, cmap="hot", vmin=0.0, vmax=100.0)
     img.set_visible(False)
     
     # create table
@@ -84,11 +115,12 @@ def sense_table(sense_list, inputNames=[], outputNames=[], rowHeight=6):
         colLabels = inputNames, 
         rowLabels = outputNames,
         loc = 'center',
+        cellLoc = 'center',
         cellColours = img.to_rgba(cells))
         #cellColours = img.to_rgba(cells_col))
 
     # fix row height and text
-    #tb.set_fontsize(34)
+    tb.set_fontsize(34)
     tb.scale(1,rowHeight)
 
     # change text color to make more visible
@@ -130,6 +162,21 @@ class Sensitivity:
 
         ### for saving to file -- set to true when functions have run
         self.done = {'unc': False, "sen": False, "ME": False, "int": False, "TEV": False}
+
+    ## pickle a list of relevant data
+    def save(self, filename):
+        print("Pickling sensitivity data in", filename, "...")
+        with open(filename, 'wb') as output:
+            pickle.dump(self.__dict__, output, pickle.HIGHEST_PROTOCOL)
+        return
+
+    ## unpickle a list of relevant data
+    def load(self, filename):
+        print("Unpickling sensitivity data in", filename, "...")
+        with open(filename, 'rb') as input:
+            temp = pickle.load(input)
+        self.__dict__.update(temp) 
+        return
 
     #@timeit
     def uncertainty(self):
