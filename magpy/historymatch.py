@@ -191,6 +191,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
         print("Making subplots of paired indices...")
         ## loop over plot_bins()
+        minCB, maxCB = 1.0, 0.0  ## set backwards here as initial values to be beaten
         printProgBar(0, len(gSets), prefix = 'Progress:', suffix = '')
         for i, s in enumerate(gSets):
             ## minmax is always [0,1] now, so don't need this
@@ -215,6 +216,11 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
               extent=ex,
               linewidths=linewidths, mincnt=1)
 
+            ## save min and max of ODP, useful user info for making global plot
+            CBmin, CBmax = np.min(im_odp.get_array()) , np.max(im_odp.get_array())
+            if CBmin < minCB:  minCB = CBmin
+            if CBmax > maxCB:  maxCB = CBmax
+
             if globalColorbar == False and colorbar == True:
                 plt.colorbar(im_imp, ax=impPlot)
                 plt.colorbar(im_odp, ax=odpPlot)
@@ -228,6 +234,8 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             #impPlot.set_xlabel("sam") 
 
             printProgBar(i+1, len(gSets), prefix = 'Progress:', suffix = '')
+
+        print("ODP range:", minCB, ":", maxCB)
 
         ## global colorbars
         if globalColorbar == True and odpMax == None:
