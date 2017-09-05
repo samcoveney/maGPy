@@ -22,7 +22,7 @@ class Wave:
         ## passed in
         self.emuls = emuls
         self.zs, self.var, self.cm = zs, var, cm
-        self.I = []
+        self.I, self.pm, self.pv = [], [], []
         self.doneImp = False
         if tests is not []:
             self.setTests(tests)
@@ -34,7 +34,7 @@ class Wave:
     ## pickle a list of relevant data
     def save(self, filename):
         print("Pickling wave data in", filename, "...")
-        w = [ self.TESTS, self.I, self.NIMP, self.doneImp ]  # test these 3 for now
+        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.doneImp ]
         with open(filename, 'wb') as output:
             pickle.dump(w, output, pickle.HIGHEST_PROTOCOL)
         return
@@ -44,7 +44,7 @@ class Wave:
         print("Unpickling wave data in", filename, "...")
         with open(filename, 'rb') as input:
             w = pickle.load(input)
-        self.TESTS, self.I, self.NIMP, self.doneImp = [i for i in w]
+        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.doneImp = [i for i in w]
         return
 
     ## set the test data
@@ -52,6 +52,8 @@ class Wave:
         if isinstance(tests, np.ndarray):
             self.TESTS = tests.astype(np.float16)
             self.I = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
+            self.pm = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
+            self.pv = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
         else:
             print("ERROR: tests must be a numpy array")
         return
@@ -77,13 +79,24 @@ class Wave:
             for c in range(chunkNum):
                 L = c*chunkSize
                 U = (c+1)*chunkSize if c < chunkNum -1 else P
-                post = E.posteriorPartial(self.TESTS[L:U])
+                post = E.posteriorPartial(self.TESTS[L:U], predict = True)
                 pmean, pvar = post['mean'], post['var'] 
+                self.pm[L:U,o] = pmean
+                self.pv[L:U,o] = pvar
                 self.I[L:U,o] = np.sqrt( ( pmean - z )**2 / ( pvar + v ) )
                 printProgBar((o*chunkNum+c+1), len(self.emuls)*chunkNum,
                               prefix = 'Progress:', suffix = '')
  
         self.doneImp = True
+        return
+
+    ## recalculate imp using stored pmean and pvar values (presumably user changed z & v
+    def recalcImp(self):
+        print("\nRecalculating Implausibilities using stored posterior means and variances")
+        print("WARNING: this will be less accurate since posterior only stored as float16")
+        for o in range(len(self.emuls)):
+            z, v = self.zs[o], self.var[o]
+            self.I[:,o] = np.sqrt( ( self.pm[:,o] - z )**2 / ( self.pv[:,o] + v ) )
         return
 
     ## find all the non-implausible points in the test points
