@@ -14,7 +14,7 @@ def posteriorSample(post):
         sample = post['mean'] + L.dot(u)
         return sample
     except np.linalg.linalg.LinAlgError as e:
-        print("ERROR:", e)
+        print("  ERROR:", e)
         return None
     
 
@@ -32,7 +32,7 @@ class Emulator:
 
     ## pickle a list of relevant data
     def save(self, filename):
-        print("Pickling emulator data in", filename, "...")
+        print("= Pickling emulator data in", filename, "=")
         # cannot pickle lambda function
         basisFuncs = self.Basis.funcs
         self.Basis.funcs = None
@@ -44,7 +44,7 @@ class Emulator:
 
     ## unpickle a list of relevant data
     def load(self, filename):
-        print("Unpickling emulator data in", filename, "...")
+        print("= Unpickling emulator data in", filename, "=")
         with open(filename, 'rb') as input:
             emu = pickle.load(input)
         self.Data, self.Basis, self.GP = emu[0], emu[1], emu[2]
@@ -57,7 +57,7 @@ class Emulator:
         if self.Data.xV.shape[0] != 0:
             post = self.posterior(self.Data.xV, Y=self.Data.yV)
         else:
-            print("ERROR: no validation data!")
+            print("  ERROR: no validation data!")
 
     ## filter out active features and emulated output
     def filter(self, X, Y):
@@ -123,7 +123,7 @@ class Emulator:
             K = linalg.cho_factor(Q)
             T = linalg.cho_solve(L, self.Data.yT - self.Basis.H.dot(self.Basis.beta))
         except np.linalg.linalg.LinAlgError as e:
-            print("ERROR:", e)
+            print("  ERROR:", e)
             return None
 
         ## do in batches
@@ -185,19 +185,19 @@ class Emulator:
         ## load from data files
         def setup(self, inputsFile, outputsFile, minmax={}, shuffle=True, V=0, active=[], output=0):
             print("= Setting emulator data =")
-            print("Loading files", [inputsFile, outputsFile])
+            print("  Loading files", [inputsFile, outputsFile])
             try:
                 self.xAll, self.yAll = np.loadtxt(inputsFile, ndmin=2), np.loadtxt(outputsFile, ndmin=2)
             except OSError as e:
-                print("I/O error({0}): {1}".format(e.errno, e.strerror))
+                print("  I/O error({0}): {1}".format(e.errno, e.strerror))
                 return
 
             # check same no. of points in inputs and outputs
             if self.xAll.shape[0] != self.yAll.shape[0]:
                 try:
-                    raise ValueError("Files must contain same number of data points")
+                    raise ValueError("  Files must contain same number of data points")
                 except ValueError as e:
-                    print("ValueError:", e)
+                    print("  ValueError:", e)
                     self.xAll, self.yAll = None, None
                     return
             
@@ -208,16 +208,16 @@ class Emulator:
                 for key in minmax:
                     if key < self.xAll.shape[1]:  self.minmax[key] = minmax[key]
             except TypeError as e:
-                print("TypeError:", e)
+                print("  TypeError:", e)
                 return
  
             ## shuffle the inputs
             if shuffle:
-                print("Shuffling data points")
+                print("  Shuffling data points")
                 perm = np.random.permutation(self.xAll.shape[0])
                 self.xAll, self.yAll = self.xAll[perm], self.yAll[perm]
             else:
-                print("Not shuffling data points")
+                print("  Not shuffling data points")
 
             ## scale the inputs 
             xTemp = np.empty(self.xAll.shape)
@@ -232,11 +232,11 @@ class Emulator:
             ## select active inputs
             active.sort()
             if active != []:
-                print("Only input features", active, "are active")
+                print("  Only input features", active, "are active")
                 xTemp = xTemp[:,active]
             else:
                 active = [i for i in range(self.xAll.shape[1])]
-                print("All input features", active , "are active")
+                print("  All input features", active , "are active")
             self.active = active
 
             ## relate global input idxs to relative idxs in active array
@@ -245,19 +245,19 @@ class Emulator:
             for idx in sorted(active):
                 self.activeRef[idx] = count
                 count = count + 1
-            print("Active global indices: local indices" , self.activeRef)
+            print("  Active global indices: local indices" , self.activeRef)
 
             ## select output
             self.output = output
-            print("Using output feature", self.output)
+            print("  Using output feature", self.output)
             yTemp = self.yAll[:,self.output]
 
             ## create training and validation sets
             Vnum = int(self.xAll.shape[0]*V/100.0)
             Tnum = self.xAll.shape[0] - Vnum
             if Tnum < 1:
-                raise ValueError("Cannot have less than 1 training point")
-            print(Tnum, "training points,", Vnum, "validation points")
+                raise ValueError("  ERROR: Cannot have less than 1 training point")
+            print(" ", Tnum, "training points,", Vnum, "validation points")
             self.xT, self.yT = xTemp[0:Tnum], yTemp[0:Tnum]
             self.xV, self.yV = xTemp[Tnum:Tnum+Vnum], yTemp[Tnum:Tnum+Vnum]
 
@@ -303,16 +303,16 @@ class Emulator:
 
             if self.basisGlobal == 'LINEAR' or 'CONST':
                 if self.basisGlobal == 'LINEAR':
-                    print("Setting default Linear mean")
+                    print("  Setting default Linear mean")
                     self.funcs = eval("lambda x: np.concatenate((np.ones([x.shape[0],1]),x),axis=1)")
                     size = len(self.Data.activeRef) + 1
                 if self.basisGlobal == 'CONST':
-                    print("Setting Constant mean")
+                    print("  Setting Constant mean")
                     self.funcs = eval("lambda x: np.ones([x.shape[0],1])")
                     size = 1
 
             else:  # user provided basis functions
-                print("Original basis functions:", self.basisGlobal)
+                print("  Original basis functions:", self.basisGlobal)
 
                 # remove functions including non-active indices
                 temp, temp2 = self.basisGlobal.split(","), []
@@ -320,7 +320,7 @@ class Emulator:
                     try:
                         item = i.split("[")[1].split("]")[0]
                         if int(item) not in self.Data.activeRef:
-                            print("WARNING: Input feature", item, "not active, omitting", i)
+                            print("  WARNING: Input feature", item, "not active, omitting", i)
                         else:
                             temp2.append(i)
                     except IndexError:
@@ -336,8 +336,8 @@ class Emulator:
                     basisLocal += i + ","
                 size = len(temp2) + 1  # constant part of mean provided below
 
-                print("Local basis functions:", "1.0," , basisLocal)
-                print("N.B. constant '1.0' basis function always provided")
+                print("  Local basis functions:", "1.0," , basisLocal)
+                print("  N.B. constant '1.0' basis function always provided")
 
                 self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"
                                  + basisLocal + " ]).T")

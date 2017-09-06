@@ -182,13 +182,13 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
         # could have better initial bounds for sigma
         temp = np.sqrt( np.amax(E.Data.yT) - np.amin(E.Data.yT) )
         bDic['s'] = bounds['s'] if 's' in bounds else [0.1, temp]
-    print("Bounds:", bDic)
+    print("  Bounds:", bDic)
 
     ## set constraints dictionary
     useConstraints = False if constraints == {} else True
     cDic = bDic.copy()
     for key in constraints: cDic[key] = constraints[key]
-    if useConstraints == True: print("Constraints:", cDic)
+    if useConstraints == True: print("  Constraints:", cDic)
 
     ## turn dictionaries into lists
     ## REQUIRES THAT ACTIVE BE SOTRTED INTO ORDER
@@ -222,7 +222,7 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
  
         initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
         print("\n  Guess: ", initGuess)
-        printProgBar(t, tries, prefix = 'Progress:')
+        printProgBar(t, tries, prefix = '  Progress:')
  
         nonPSDfail = False
         try:
@@ -234,7 +234,7 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
                 res = minimize(LLH, guess, args=(E,), method = 'L-BFGS-B', jac=True)
 
             ## for checks on if function gradient is correct
-            debugGrad = True
+            debugGrad = False
             if debugGrad:
                 func_m = lambda x: loglikelihood_mucm(x, E, debug="func")
                 grad_m = lambda x: loglikelihood_mucm(x, E, debug="grad")
@@ -268,7 +268,7 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
                     bestMin, bestHP = res.fun, E.GP.K.untransform(res.x)
                     firstTry = False
  
-    printProgBar(tries, tries, prefix = 'Progress:')
+    printProgBar(tries, tries, prefix = '  Progress:')
 
     print("= Best Optimization Result =")
     if firstTry == False:
@@ -285,14 +285,14 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
         E.GP.makeA()
 
         for i,d in enumerate(E.GP.delta):
-            print("Best Delta", E.Data.active[i], ":", d)
-        print("Best Nugget:", E.GP.nugget)
+            print("  Best Delta", E.Data.active[i], ":", d)
+        print("  Best Nugget:", E.GP.nugget)
         if E.GP.mucm == True:
-            print("MUCM Sigma:", E.GP.sigma)
+            print("  MUCM Sigma:", E.GP.sigma)
         else:
-            print("Best Sigma:", E.GP.sigma)
-        print("Beta:", E.Basis.beta)
+            print("  Best Sigma:", E.GP.sigma)
+        print("  Beta:", E.Basis.beta)
 
     else:
-        print("ERROR: No optimization was made.")
+        print("  ERROR: No optimization was made.")
 
