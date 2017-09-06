@@ -54,7 +54,10 @@ class Emulator:
     ## validation checks against stored validation data
     def validation(self):
         print("= Validating against stored validation data =")
-        post = self.posterior(self.Data.xV, Y=self.Data.yV)
+        if self.Data.xV.shape[0] != 0:
+            post = self.posterior(self.Data.xV, Y=self.Data.yV)
+        else:
+            print("ERROR: no validation data!")
 
     ## filter out active features and emulated output
     def filter(self, X, Y):
