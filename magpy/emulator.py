@@ -291,17 +291,22 @@ class Emulator:
             self.funcs = None
             self.H = []
             self.Data = Data
-            self.basisGlobal = None
+            self.basisGlobal = 'LINEAR'
 
         ## will need access to 'active' ... 
-        def setup(self, basisGlobal=None):
+        def setup(self, basisGlobal='LINEAR'):
             print("= Setting up basis functions =")
             self.basisGlobal = basisGlobal
 
-            if self.basisGlobal == None:  # default LINEAR mean option
-                print("Setting default Linear mean")
-                self.funcs = eval("lambda x: np.concatenate((np.ones([x.shape[0],1]), x), axis=1)")
-                size = len(self.Data.activeRef) + 1
+            if self.basisGlobal == 'LINEAR' or 'CONST':
+                if self.basisGlobal == 'LINEAR':
+                    print("Setting default Linear mean")
+                    self.funcs = eval("lambda x: np.concatenate((np.ones([x.shape[0],1]),x),axis=1)")
+                    size = len(self.Data.activeRef) + 1
+                if self.basisGlobal == 'CONST':
+                    print("Setting Constant mean")
+                    self.funcs = eval("lambda x: np.ones([x.shape[0],1])")
+                    size = 1
 
             else:  # user provided basis functions
                 print("Original basis functions:", self.basisGlobal)
