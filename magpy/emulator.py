@@ -7,7 +7,7 @@ from magpy._utils import *
 
 ## draw random sample from posterior distribution
 def posteriorSample(post):
-    print("= Drawing sample from posterior distribution =")
+    #print("= Drawing sample from posterior distribution =")
     try:
         L = np.linalg.cholesky(post['var'])
         u = np.random.randn(post['X'].shape[0])
@@ -48,7 +48,7 @@ class Emulator:
         with open(filename, 'rb') as input:
             emu = pickle.load(input)
         self.Data, self.Basis, self.GP = emu[0], emu[1], emu[2]
-        self.Basis.setup(self.Basis.basisGlobal) # recreate lambda function
+        self.Basis.setup(self.Basis.basisGlobal, prnt=False) # recreate lambda function
         return
 
     ## validation checks against stored validation data
@@ -69,13 +69,18 @@ class Emulator:
         return X, Y
 
     ## posterior distribution
-    def posterior(self, X, predict=False, Y=None):
+    def posterior(self, X, predict=False, Y=None, r=None):
 
         # need other checks on X and Y as well as filter e.g. length
         X, Y = self.filter(X, Y)
 
         covar = self.GP.K.covar(self.Data.xT, X, self.GP.delta, self.GP.nugget)
         Anew = self.GP.K.A(X, self.GP.delta, self.GP.nugget, predict)
+
+        ## use extra pointwise variance for noisefit algorithm
+        if r is not None and predict == True and self.GP.rSet == True:
+            ## TODO: check that r is correct size etc.
+            np.fill_diagonal(Anew, Anew.diagonal() + r/(self.GP.sigma**2))
 
         try:
             L = linalg.cho_factor(self.GP.A)        
@@ -271,6 +276,7 @@ class Emulator:
             self.K = mk.RBFmucm()  # only kernel choice
             self.A = []
             self.Data = Data
+            self.r, self.rSet = 0, False
 
         ## initialize
         def setup(self, nugget=0.0, mucm=False, fixNugget=True):
@@ -285,7 +291,20 @@ class Emulator:
         ## create the A matrix
         def makeA(self):
             self.A = self.K.A(self.Data.xT, self.delta, self.nugget)
+            if self.rSet:  np.fill_diagonal(self.A, self.A.diagonal() + self.r/(self.sigma**2))
 
+        def setExtraVar(self, r, message=True):
+            if self.mucm == False:
+                self.rSet = True
+                if len(r) == self.Data.xT.shape[0]:
+                    if message == True:  print("\n*** Updating array 'r' of constant variances***")
+                    self.r = r
+                else:
+                    print("\nERROR: length of 'r' does not match number of data points")
+                    exit()
+            else:
+                print("\nERROR: array 'r' of constant variances not compatible with MUCM T")
+                exit()
              
     ## class for basis functions
     class Basis(object):
@@ -297,17 +316,17 @@ class Emulator:
             self.basisGlobal = 'LINEAR'
 
         ## will need access to 'active' ... 
-        def setup(self, basisGlobal='LINEAR'):
-            print("= Setting up basis functions =")
+        def setup(self, basisGlobal='LINEAR', prnt=True):
+            if prnt: print("= Setting up basis functions =")
             self.basisGlobal = basisGlobal
 
-            if self.basisGlobal == 'LINEAR' or 'CONST':
+            if self.basisGlobal == 'LINEAR' or self.basisGlobal == 'CONST':
                 if self.basisGlobal == 'LINEAR':
-                    print("  Setting default Linear mean")
+                    if prnt: print("  Setting default Linear mean")
                     self.funcs = eval("lambda x: np.concatenate((np.ones([x.shape[0],1]),x),axis=1)")
                     size = len(self.Data.activeRef) + 1
                 if self.basisGlobal == 'CONST':
-                    print("  Setting Constant mean")
+                    if prnt: print("  Setting Constant mean")
                     self.funcs = eval("lambda x: np.ones([x.shape[0],1])")
                     size = 1
 
@@ -320,7 +339,7 @@ class Emulator:
                     try:
                         item = i.split("[")[1].split("]")[0]
                         if int(item) not in self.Data.activeRef:
-                            print("  WARNING: Input feature", item, "not active, omitting", i)
+                            if prnt: print("  WARNING: Input feature",item,"not active, omitting", i)
                         else:
                             temp2.append(i)
                     except IndexError:
@@ -336,8 +355,8 @@ class Emulator:
                     basisLocal += i + ","
                 size = len(temp2) + 1  # constant part of mean provided below
 
-                print("  Local basis functions:", "1.0," , basisLocal)
-                print("  N.B. constant '1.0' basis function always provided")
+                if prnt: print("  Local basis functions:", "1.0," , basisLocal)
+                if prnt: print("  N.B. constant '1.0' basis function always provided")
 
                 self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"
                                  + basisLocal + " ]).T")
