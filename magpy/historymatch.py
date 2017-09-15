@@ -67,14 +67,14 @@ class Wave:
         P = self.TESTS[:,0].size
         if P > chunkSize:
             chunkNum = int(np.ceil(P / chunkSize))
-            print("\nCalculating Implausibilities of", P, "points in",\
-                    chunkNum, "chunks of", chunkSize)
+            print("  Calculating Implausibilities of", P, "points in",\
+                    chunkNum, "chunks of", chunkSize, "...")
         else:
             chunkNum = 1
-            print("\nCalculating Implausibilities of", P, "points")
+            print("  Calculating Implausibilities of", P, "points...")
 
         ## loop over outputs (i.e. over emulators)
-        printProgBar(0, len(self.emuls)*chunkNum, prefix = 'Progress:', suffix = '')
+        printProgBar(0, len(self.emuls)*chunkNum, prefix = '  Progress:', suffix = '')
         for o in range(len(self.emuls)):
             E, z, v = self.emuls[o], self.zs[o], self.var[o]
 
@@ -87,7 +87,7 @@ class Wave:
                 self.pv[L:U,o] = pvar
                 self.I[L:U,o] = np.sqrt( ( pmean - z )**2 / ( pvar + v ) )
                 printProgBar((o*chunkNum+c+1), len(self.emuls)*chunkNum,
-                              prefix = 'Progress:', suffix = '')
+                              prefix = '  Progress:', suffix = '')
  
         self.doneImp = True
         return
@@ -150,10 +150,11 @@ class Wave:
         if NROY == False:
             print("= Creating NROY cloud from NIMP points =")
             LOC = self.TESTS[self.NIMP]
+            dic = self.NIMPminmax
         else:
             print("= Creating new NROY cloud from current NROY points =")
             LOC = self.NROY
-        dic = self.NIMPminmax
+            dic = self.NROYminmax
         SCALE = np.array( [dic[mm][1]-dic[mm][0] for mm in dic] )
         SCALE = SCALE * factor
 
@@ -289,7 +290,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         print("Making subplots of paired indices...")
         ## loop over plot_bins()
         minCB, maxCB = 1.0, 0.0  ## set backwards here as initial values to be beaten
-        printProgBar(0, len(gSets), prefix = 'Progress:', suffix = '')
+        printProgBar(0, len(gSets), prefix = '  Progress:', suffix = '')
         for i, s in enumerate(gSets):
             ## minmax is always [0,1] now, so don't need this
             #ex = ( minmax[s[0]][0], minmax[s[0]][1], minmax[s[1]][0], minmax[s[1]][1])
