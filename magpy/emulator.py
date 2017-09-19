@@ -155,7 +155,7 @@ class Emulator:
             ISE[i] = ( Y[i] - mean[i] ) / np.sqrt(np.abs(var[i,i]))
             if np.abs(ISE[i]) >= cutoff:
                 count += 1
-                if message: print("  Bad predictions:", X[i], "cutoff:", np.round(ISE[i],decimals=4))
+                if message: print("  Bad predictions:", X[i], "ISE:", np.round(ISE[i],decimals=4))
         print("ISE >", cutoff, "for", count, "/", ISE.size, "points")
         return ISE
 
