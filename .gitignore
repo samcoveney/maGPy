@@ -7,3 +7,5 @@ build/
 
 examples/01_Emulator_Fit/inputs
 examples/01_Emulator_Fit/outputs
+
+*.pkl
