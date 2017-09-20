@@ -8,4 +8,7 @@ build/
 examples/01_Emulator_Fit/inputs
 examples/01_Emulator_Fit/outputs
 
+examples/05_Noise_Fit/*Inputs
+examples/05_Noise_Fit/*Outputs
+
 *.pkl
