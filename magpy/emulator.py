@@ -361,7 +361,7 @@ class Emulator:
                 self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"
                                  + basisLocal + " ]).T")
 
-            self.beta = np.ones(size)
+            if self.beta == []:  self.beta = np.ones(size)  # makes loading work
             self.makeH()
 
         ## create the H matrix
