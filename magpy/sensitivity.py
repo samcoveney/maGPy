@@ -644,7 +644,7 @@ class Sensitivity:
             self.wb = temp
             ## then define xw as the means (value doesn't matter)
             self.xw = self.m[self.w]
-
+            #print(self.w, self.wb)
             self.in_xw_loop()
 
             self.EEE = (self.sigma**2) *\
@@ -676,7 +676,12 @@ class Sensitivity:
             self.EVaaa = self.EEE - self.EE2
             self.senseindexwb[P] = self.EVaaa
 
-            self.EVTw[P] = self.EVf - self.EVaaa
+            ## I think I was saving the result in the wrong location
+            #self.EVTw[P] = self.EVf - self.EVaaa
+            #print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
+            ## this should be correct...
+            self.EVTw[self.w] = self.EVf - self.EVaaa
+        for P in range(len(self.m)):
             print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
 
 
