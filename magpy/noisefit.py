@@ -67,7 +67,7 @@ def noisefit(data, noise, tries=5, stop=20, samples=200, filename="rValues"):
         print("\n= TRAIN GP ON DATA WITH NOISE FROM GP " + str(count) + " =")
         post = noise.posteriorPartial(x, predict = PREDICT)
         r = __untransform(post["mean"], post["var"])
-        data.GP.setExtraVar(r, message = False)
+        data.GP.setExtraVar(r, prnt = False)
         mp.optimize(data, tries=tries)
 
         ## save

@@ -182,59 +182,59 @@ class Emulator:
     ## class for data
     class Data():
         def __init__(self):
-            self.xAll, self.yAll = None, None  # for all data, unscaled, shuffled
+            self.xAll, self.yAll = np.empty([0,0]), np.empty([0,0]) # all data, unscaled, shuffled
             self.minmax, self.minmaxScaled = {}, {}
-            self.xT, self.yT, self.xV, self.yV = None, None, None, None  # scaled, T-V split
-            self.activeRef = {}
+            self.xT, self.yT, self.xV, self.yV = \
+              np.empty([0,0]), np.empty([0,0]), np.empty([0,0]), np.empty([0,0])  # scaled, T-V split
+            self.active, self.activeRef = [], {}
 
         ## load from data files
-        def setup(self, inputsFile, outputsFile, minmax={}, shuffle=True, V=0, active=[], output=0):
+        def setup(self, iFile, oFile, minmax={}, shuffle=True, V=0, active=[], output=0):
             print("= Setting emulator data =")
-            print("  Loading files", [inputsFile, outputsFile])
-            try:
-                self.xAll, self.yAll = np.loadtxt(inputsFile, ndmin=2), np.loadtxt(outputsFile, ndmin=2)
-            except OSError as e:
-                print("  I/O error({0}): {1}".format(e.errno, e.strerror))
-                return
+            print("  Loading files", [iFile, oFile])
+
+            self.xAll, self.yAll = np.loadtxt(iFile, ndmin=2), np.loadtxt(oFile, ndmin=2)
 
             # check same no. of points in inputs and outputs
             if self.xAll.shape[0] != self.yAll.shape[0]:
-                try:
-                    raise ValueError("  Files must contain same number of data points")
-                except ValueError as e:
-                    print("  ValueError:", e)
-                    self.xAll, self.yAll = None, None
-                    return
+                raise ValueError("Files must contain same number of data points")
             
             ## find [min,max] of each dimension
             for i in range(self.xAll.shape[1]):  # find data minmax
                 self.minmax[i] = [ np.amin(self.xAll[:,i]), np.amax(self.xAll[:,i]) ]
-            try:  # user can override individual minmax
-                for key in minmax:
-                    if key < self.xAll.shape[1]:  self.minmax[key] = minmax[key]
-            except TypeError as e:
-                print("  TypeError:", e)
-                return
- 
+            # user can override individual minmax
+            if not isinstance(minmax, dict):
+                raise TypeError("minmax must be a dictionary i.e. {}")
+            for key in minmax:
+                if key < self.xAll.shape[1]:
+                    mm = minmax[key]
+                    if not all(isinstance(item, float) for item in mm) or len(mm) != 2:
+                        raise ValueError("minmax dictionary values must be [float, float]")
+                    self.minmax[key] = minmax[key]
+                else:  print("█ WARNING: minmax key", key, "is too big, ignoring")
+
             ## shuffle the inputs
             if shuffle:
                 print("  Shuffling data points")
                 perm = np.random.permutation(self.xAll.shape[0])
                 self.xAll, self.yAll = self.xAll[perm], self.yAll[perm]
-            else:
-                print("  Not shuffling data points")
 
             ## scale the inputs 
             xTemp = np.empty(self.xAll.shape)
             for i in range(self.xAll.shape[1]):
                 xTemp[:,i] = (self.xAll[:,i]    - self.minmax[i][0])\
-                          / (self.minmax[i][1] - self.minmax[i][0])
+                           / (self.minmax[i][1] - self.minmax[i][0])
 
             ## record minmax of the scaled inputs
             for i in range(self.xAll.shape[1]):
                 self.minmaxScaled[i] = [ np.amin(xTemp[:,i]), np.amax(xTemp[:,i]) ]
 
             ## select active inputs
+            if not isinstance(active, list) or not all(isinstance(item, int) for item in active):
+                raise ValueError("active must be list of integers")
+            if any(a >= self.xAll.shape[1] for a in active):
+                print("█ WARNING: some active indices were too big and will be removed")
+            active = [a for a in active if a < self.xAll.shape[1]]
             active.sort()
             if active != []:
                 print("  Only input features", active, "are active")
@@ -246,22 +246,26 @@ class Emulator:
 
             ## relate global input idxs to relative idxs in active array
             self.activeRef = {}
-            count = 0
-            for idx in sorted(active):
-                self.activeRef[idx] = count
-                count = count + 1
-            print("  Active global indices: local indices" , self.activeRef)
+            for count, a in enumerate(self.active):  self.activeRef[a] = count
+            print("  Active {global: local} indices" , self.activeRef)
 
             ## select output
+            if not isinstance(output, int):
+                raise ValueError("output must be an integer")
+            if output >= self.yAll.shape[1]:
+                raise ValueError("output index is too big")
             self.output = output
             print("  Using output feature", self.output)
             yTemp = self.yAll[:,self.output]
 
             ## create training and validation sets
+            if not isinstance(V, int) and not isinstance(V, float):
+                raise ValueError("V must be an integer or float")
             Vnum = int(self.xAll.shape[0]*V/100.0)
             Tnum = self.xAll.shape[0] - Vnum
-            if Tnum < 1:
-                raise ValueError("  ERROR: Cannot have less than 1 training point")
+            if Tnum < 2:
+                Tnum, Vnum = 2, self.xAll.shape[0] - 2
+                print("█ WARNING: setting required minimum of 2 training points")
             print(" ", Tnum, "training points,", Vnum, "validation points")
             self.xT, self.yT = xTemp[0:Tnum], yTemp[0:Tnum]
             self.xV, self.yV = xTemp[Tnum:Tnum+Vnum], yTemp[Tnum:Tnum+Vnum]
@@ -270,22 +274,28 @@ class Emulator:
     ## class for kernel hyperparameters
     class GP(object):
         def __init__(self, Data):
-            self.delta, self.nugget, self.sigma = [], [], []
+            self.Data = Data
+            self.delta, self.nugget, self.sigma = np.empty([0]), 0.0, 1.0
             self.mucm = False # for interpretation of HPs optimized values
             self.fixNugget = True # also to interp proerply after opt
-            self.K = mk.RBFmucm()  # only kernel choice
-            self.A = []
-            self.Data = Data
+            self.K = mk.RBFmucm()  # only kernel choice at the moment
+            self.A = np.empty([0,0])
             self.r, self.rSet = 0, False
 
         ## initialize
         def setup(self, nugget=0.0, mucm=False, fixNugget=True):
             print("= Setting up GP =")
+
+            if nugget >= 0 and nugget < 1:  self.nugget = nugget
+            else:  print("█ WARNING: require 0.0 <= nugget < 1.0, setting to 0.0")
+
+            if fixNugget == True or fixNugget == False:  self.fixNugget = fixNugget
+            else:  print("█ WARNING: fixNugget must be True or False, setting True")
+
+            if mucm == True or mucm == False:  self.mucm = mucm
+            else:  print("█ WARNING: mucm must be True or False, setting False")
+
             self.delta = np.ones(len(self.Data.activeRef))
-            self.mucm = mucm
-            self.fixNugget = fixNugget
-            self.nugget = nugget
-            self.sigma = 1.0
             self.makeA()
 
         ## create the A matrix
@@ -293,26 +303,21 @@ class Emulator:
             self.A = self.K.A(self.Data.xT, self.delta, self.nugget)
             if self.rSet:  np.fill_diagonal(self.A, self.A.diagonal() + self.r/(self.sigma**2))
 
-        def setExtraVar(self, r, message=True):
+        def setExtraVar(self, r, prnt=True):
             if self.mucm == False:
-                self.rSet = True
                 if len(r) == self.Data.xT.shape[0]:
-                    if message == True:  print("\n*** Updating array 'r' of constant variances***")
-                    self.r = r
-                else:
-                    print("\nERROR: length of 'r' does not match number of data points")
-                    exit()
-            else:
-                print("\nERROR: array 'r' of constant variances not compatible with MUCM T")
-                exit()
+                    self.r, self.rSet = r, True
+                    if prnt:  print("  Updating array of pointwise variances")
+                else:  print("█ WARNING: array size != number of data points, doing nothing")
+            else:  print("█ WARNING: not compatible with mucm, doing nothing")
              
     ## class for basis functions
     class Basis(object):
         def __init__(self, Data):
-            self.beta = []
-            self.funcs = None
-            self.H = []
             self.Data = Data
+            self.beta = np.empty([0])
+            self.funcs = None
+            self.H = np.empty([0,0])
             self.basisGlobal = 'LINEAR'
 
         ## will need access to 'active' ... 
@@ -331,7 +336,7 @@ class Emulator:
                     size = 1
 
             else:  # user provided basis functions
-                print("  Original basis functions:", self.basisGlobal)
+                if prnt:  print("  Provided basis functions:", self.basisGlobal)
 
                 # remove functions including non-active indices
                 temp, temp2 = self.basisGlobal.split(","), []
@@ -339,11 +344,12 @@ class Emulator:
                     try:
                         item = i.split("[")[1].split("]")[0]
                         if int(item) not in self.Data.activeRef:
-                            if prnt: print("  WARNING: Input feature",item,"not active, omitting", i)
+                            print("█ WARNING: input feature",item,"not active, omitting", i)
                         else:
                             temp2.append(i)
                     except IndexError:
-                        temp2.append(i)
+                        print("█ WARNING: function", i ,"ommitted, constant included by default")
+                        #temp2.append(i)
 
                 # remap Global indices mapped into Local indices
                 basisLocal = ""
@@ -356,12 +362,10 @@ class Emulator:
                 size = len(temp2) + 1  # constant part of mean provided below
 
                 if prnt: print("  Local basis functions:", "1.0," , basisLocal)
-                if prnt: print("  N.B. constant '1.0' basis function always provided")
-
                 self.funcs = eval("lambda x: np.array([ np.ones(x.shape[0]),"
                                  + basisLocal + " ]).T")
 
-            if self.beta == []:  self.beta = np.ones(size)  # makes loading work
+            if self.beta.size == 0:  self.beta = np.ones(size)  # makes loading work
             self.makeH()
 
         ## create the H matrix
