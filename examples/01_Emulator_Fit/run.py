@@ -43,6 +43,8 @@ parser.add_argument("--nugget", type=float, default=0.0,
         help="sets the initial value of the nugget")
 parser.add_argument("--fitnoise", default=False,
         help="nugget will be trained on the data", action="store_true")
+parser.add_argument("--load", default=False,
+        help="attempt to load emulator from .pkl file", action="store_true")
 args = parser.parse_args()
 
 
@@ -71,18 +73,25 @@ else:
         y = y + args.noise*np.random.randn(y.size)
         np.savetxt(OUTPUTS, y)
 
-
-print("... Fitting an emulator")
-## setup the emulator
+## emulator instance
 E = mp.Emulator()
-E.Data.setup(INPUTS, OUTPUTS)
-E.Basis.setup()
-E.GP.setup(nugget = args.nugget, fixNugget = (not args.fitnoise))
+if args.load == False:
+    ## setup the emulator
+    E.Data.setup(INPUTS, OUTPUTS)
+    E.Basis.setup()
+    E.GP.setup(nugget = args.nugget, fixNugget = (not args.fitnoise))
 
-## optimize the emulator
-mp.optimize(E, tries=10)
+    ## optimize the emulator
+    print("... Fitting an emulator")
+    mp.optimize(E, tries=10)
+    
+    ## save the emulator
+    E.save("emulator.pkl")
+else:
+    ## load the emulator
+    E.load("emulator.pkl")
 
 ## convert nugget into noise estimate
-if args.fitnoise:
+if E.GP.fixNugget == False:
     noisesig = np.sqrt(E.GP.sigma**2 * (E.GP.nugget)/(1.0-E.GP.nugget))
     print("... Noise width, as estimated from fitted sigma and nugget, is:" , noisesig)
