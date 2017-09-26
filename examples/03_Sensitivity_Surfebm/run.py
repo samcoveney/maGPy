@@ -96,6 +96,7 @@ if args.noresense == False:
 else:
     S = mp.Sensitivity(E, inputMeans, inputVars)
     S.load("sens.pkl")
+    S.results()
 
 ## sensitivity table - each row is a separate emulator
 mp.sense_table([E,E], [S,S], ["input 0", "input 1"], ["output 0","output 0 again..."])

@@ -161,27 +161,45 @@ class Sensitivity:
         self.W = np.linalg.inv( (self.H.T).dot(self.G) )
 
         ### for saving to file -- set to true when functions have run
-        self.done = {'unc': False, "sen": False, "ME": False, "int": False, "TEV": False}
+        self.done = {"unc": False, "sen": False, "ME": False, "int": False, "TEV": False}
 
     ## pickle a list of relevant data
     def save(self, filename):
-        print("Pickling sensitivity data in", filename, "...")
+        print("= Pickling sensitivity data in", filename, "=")
         with open(filename, 'wb') as output:
             pickle.dump(self.__dict__, output, pickle.HIGHEST_PROTOCOL)
         return
 
     ## unpickle a list of relevant data
     def load(self, filename):
-        print("Unpickling sensitivity data in", filename, "...")
+        print("= Unpickling sensitivity data in", filename, "=")
         with open(filename, 'rb') as input:
             temp = pickle.load(input)
         self.__dict__.update(temp) 
         return
 
+    def results(self):
+        print("= UQSA results =")
+        if self.done["unc"]:
+            print("  E*[ E[f(X)] ]  :",self.uE)
+            print("  var*[ E[f(X)] ]:",self.uV)
+            print("  E*[ var[f(X)] ]:",self.uEV)
+        if self.done["sen"]:
+            for i, SI in enumerate(self.senseindex):
+                if self.done["unc"]:  print("  E(V" + str(i) +")/EV:", SI/self.uEV)
+                else:  print("  E(V" + str(i) +"):", SI)
+        if self.done["TEV"]:
+            for P in range(len(self.m)):
+                print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
+        if self.done["ME"]:
+            self.plot_main_effect()
+        if self.done["int"]:
+            print("  (Interaction effects not replotted here)")
+
     #@timeit
     def uncertainty(self):
         print("== Uncertainty measures ==")
-        self.done['unc'] = True
+        self.done["unc"] = True
 
         self.w = [i for i in range(len(self.m))]
 
@@ -448,151 +466,127 @@ class Sensitivity:
         self.Tw_calc()
         self.Rw_calc()
 
-    def main_effect(self, plot=False, points=100, customKey=[], customLabels=[], plotShrink=0.9, w=[], black_white=False):
-        if plot == True: print("== Main effect measures ==")
-        self.done["ME"] = True
+    def main_effect(self, plot=False, points=100, customKey=[], customLabels=[], plotShrink=0.9, w=[], black_white=False, calledByInteraction=False):
+        if not calledByInteraction:
+            print("== Main effects ==")
+            print("  Calculating main effects...")
+            self.done["ME"] = True
         self.effect = np.zeros([self.m.size , points])
         self.mean_effect = np.zeros([self.m.size , points])
 
         ## this sorts out options for which w indices to use
-        if w == []:
-            w = range(0,len(self.m))
-
-        if plot:
-            fig = plt.figure()
-            ax = plt.subplot(111)
-            # different way to generate colors
-            #ax.set_prop_cycle(cycler('color',[cmap(k) for k in np.linspace(0, 1.0, len(w))] ) * cycler('linestyle',['-','--','-.',':']))
-            #ax.set_prop_cycle(cycler('linestyle',['-','--','-.',':']) * cycler('color',[cmap(k) for k in np.linspace(0, 1.0, len(w)) ]))
-            if black_white:
-                ax.set_prop_cycle(cycler('linestyle',['-','--','-.',':']))
-                cmap = plt.get_cmap('plasma')
-                colors = cmap(np.linspace(0, 1.0, len(w)))
-            else:
-                cmap = plt.get_cmap('jet')
-                colors = cmap(np.linspace(0, 1.0, len(w)))
-                
+        if w == []:  w = range(0,len(self.m))
 
         self.initialise_matrices()
-       
-        # cn: color number, indexs the colour to use
-        cn = 0 
         self.b4_input_loop()
         for P in w:
-            if plot == True: print("  Input", P, "range", self.minmax[P])
             self.setup_w_wb(P)
             self.af_w_wb_def()
 
-            # range of the inputs
-            minx = self.minmax[P][0]
-            maxx = self.minmax[P][1]
-            j = 0 ## j just counts index for each value of xw we try
-            for self.xw in np.linspace(minx,maxx,points): ## changes value of xw
+            minx, maxx = self.minmax[P][0], self.minmax[P][1]  # range of inputs
+            # change xw in increments over the input range (j is index for range)
+            for j, self.xw in enumerate(np.linspace(minx,maxx,points)):
                 self.in_xw_loop()
 
                 self.Emw = self.Rw.dot(self.beta) + self.Tw.dot(self.e)
                 self.ME = (self.Rw-self.R).dot(self.beta)\
                     + (self.Tw-self.T).dot(self.e)
-                self.effect[P, j] = self.ME
-                self.mean_effect[P, j] = self.Emw
-                j=j+1 ## calculate for next xw value
-           
-            if plot:
-                if customKey == []:
-                    ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
-                        linewidth=2.0, label='x'+str(P) , color=colors[cn] )
-                else:
-                    try:
-                        ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
-                            linewidth=2.0, label=str(customKey[P]) , color=colors[cn])
-                    except IndexError as e:
-                        ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
-                            linewidth=2.0, label='x'+str(P) , color=colors[cn])
+                self.effect[P, j] = self.ME  # mean effect (when x=xw) minus overall mean effect
+                self.mean_effect[P, j] = self.Emw  # just the mean effect
+        
+        if plot:  self.plot_main_effect(points=points, customKey=customKey, customLabels=customLabels, plotShrink=0.9, w=w, black_white=black_white)
+        return
 
-            cn = cn + 1 # use different color next plot
-                        
-        if plot:
-            # Shrink current axis by 20%
-            box = ax.get_position()
-            ax.set_position([box.x0, box.y0, box.width * plotShrink, box.height])
-            # Put a legend to the right of the current axis
-            ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))     
-            #ax.legend(loc='best')
+    def plot_main_effect(self, points=100, customKey=[], customLabels=[], plotShrink=0.9, w=[], black_white=False):
+        print("  Plotting main effects")
+        ## this sorts out options for which w indices to use
+        if w == []:  w = range(0,len(self.m))
 
+        fig, ax = plt.figure(), plt.subplot(111)
+        if black_white:
+            ax.set_prop_cycle(cycler('linestyle',['-','--','-.',':']))
+            cmap = plt.get_cmap('plasma')
+            colors = cmap(np.linspace(0, 1.0, len(w)))
+        else:
+            cmap = plt.get_cmap('jet')
+            colors = cmap(np.linspace(0, 1.0, len(w)))
+                
+        for cn, P in enumerate(w):  # cn: color number
+            print("  Input", P, "range", self.minmax[P])
 
-            if customLabels == []:
-                plt.xlabel("xw")
-                plt.ylabel("Main Effect")
+            if customKey == []:
+                ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
+                    linewidth=2.0, label='x'+str(P) , color=colors[cn] )
             else:
                 try:
-                    plt.xlabel(customLabels[0])
+                    ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
+                        linewidth=2.0, label=str(customKey[P]) , color=colors[cn])
                 except IndexError as e:
-                    plt.xlabel("xw")
-                try:
-                    plt.ylabel(customLabels[1])
-                except IndexError as e:
-                    plt.ylabel("Main Effect")
+                    ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\
+                        linewidth=2.0, label='x'+str(P) , color=colors[cn])
+                        
+        ## Shrink current axis by 20%; put legen to right of current axis
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0, box.width * plotShrink, box.height])
+        ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))     
 
-            print("  Plotting main effects...")
-            plt.show()
+        ## labelling
+        if customLabels == []:
+            plt.xlabel("xw"); plt.ylabel("Main Effect")
+        else:
+            try:  plt.xlabel(customLabels[0])
+            except IndexError as e:  plt.xlabel("xw")
+            try:  plt.ylabel(customLabels[1])
+            except IndexError as e:  plt.ylabel("Main Effect")
 
+        plt.show()
 
     def interaction_effect(self, i, j, points = 25, customLabels=[]):
         print("== Interaction effects ==")
+        print("  Indices:", [i, j])
         self.done["int"] = True
         self.interaction = np.zeros([points , points])
 
-        ## gotta redo main effect to do the interaction...
+        ## gotta redo main effect to do the interaction, save original values
+        effectTemp, mean_effectTemp = self.effect, self.mean_effect
+
         try:
-            #print("  (Recalc. main effect with", points, "points)")
-            self.main_effect(plot=False, points=points, w=[i,j])
+            self.main_effect(plot=False, points=points, w=[i,j], calledByInteraction=True)
         except IndexError as e:
-            print("ERROR: invalid input indices. Return None.")
+            print("  ERROR: invalid input indices, doing nothing")
             return None
 
         self.initialise_matrices()
         self.b4_input_loop()
 
-        ### w = {i,j}
-        self.w = [i, j]
-        self.wb = []
+        self.w, self.wb = [i, j], []
         for k in range(0,len(self.m)):
-            if k not in self.w:
-                self.wb.append(k)
-
+            if k not in self.w:  self.wb.append(k)
         self.af_w_wb_def()
 
-        # range of the inputs
-        ra_i = self.minmax[i]
-        ra_j = self.minmax[j]
-        #print("\nCalculating", points*points, "interaction effects...")
-        icount = 0 # counts index for each value of xwi we try
-        for xwi in np.linspace(ra_i[0],ra_i[1],points): ## value of xw[i]
-            jcount = 0 ## j counts index for each value of xwj we try
-            for xwj in np.linspace(ra_j[0],ra_j[1],points): ## value of xw[j]
+        ra_i, ra_j = self.minmax[i], self.minmax[j]  # range of the inputs
+        for icount, xwi in enumerate(np.linspace(ra_i[0],ra_i[1],points)): ## value of xw[i]
+            for jcount, xwj in enumerate(np.linspace(ra_j[0],ra_j[1],points)): ## value of xw[j]
                 self.xw=np.array( [ xwi , xwj ] )
                 self.in_xw_loop()
 
-                if False:
-                #if True:
-                    self.IE = (self.Rw - self.R).dot(self.beta)\
-                            + (self.Tw - self.T).dot(self.e)\
-                            - self.effect[i, icount]\
-                            - self.effect[j, jcount]
-                else:
-                    self.IE = (self.Rw + self.R).dot(self.beta)\
-                            + (self.Tw + self.T).dot(self.e)\
-                            - self.mean_effect[i, icount]\
-                            - self.mean_effect[j, jcount]
+                ## identical results (equivilent expressions)
+                #    self.IE = (self.Rw - self.R).dot(self.beta)\
+                #            + (self.Tw - self.T).dot(self.e)\
+                #            - self.effect[i, icount]\
+                #            - self.effect[j, jcount]
+                self.IE = (self.Rw + self.R).dot(self.beta)\
+                        + (self.Tw + self.T).dot(self.e)\
+                        - self.mean_effect[i, icount]\
+                        - self.mean_effect[j, jcount]
 
                 self.interaction[icount, jcount] = self.IE
-                jcount=jcount+1 ## calculate for next xw value
-            icount=icount+1 ## calculate for next xw value
+
+        ## set the effects and mean effects back to their original values
+        self.effect, self.mean_effect = effectTemp, mean_effectTemp
 
         ## contour plot of interaction effects
-        fig = plt.figure()
-
-        ax = plt.gca()        
+        fig, ax = plt.figure(), plt.gca()
         im = ax.imshow(self.interaction, origin='lower',\
              cmap=plt.get_cmap('hot'), extent=(ra_i[0],ra_i[1],ra_j[0],ra_j[1]))
         plt.colorbar(im)
@@ -601,14 +595,10 @@ class Sensitivity:
             plt.xlabel("input " + str(self.w[0]))
             plt.ylabel("input " + str(self.w[1]))
         else:
-            try:
-                plt.xlabel(customLabels[0])
-            except IndexError as e:
-                plt.xlabel("input " + str(self.w[0]))
-            try:
-                plt.ylabel(customLabels[1])
-            except IndexError as e:
-                plt.ylabel("input " + str(self.w[1]))
+            try:  plt.xlabel(customLabels[0])
+            except IndexError as e:  plt.xlabel("input " + str(self.w[0]))
+            try:  plt.ylabel(customLabels[1])
+            except IndexError as e:  plt.ylabel("input " + str(self.w[1]))
             
         # trying to force a square aspect ratio
         im2 = ax.get_images()
@@ -616,7 +606,7 @@ class Sensitivity:
         ax.set_aspect(abs((extent[1]-extent[0])/(extent[3]-extent[2]))/1.0)
 
         plt.show()
-
+        return
 
     ##### isn't clear that this is correct results, since no MUCM examples...
     def totaleffectvariance(self):
