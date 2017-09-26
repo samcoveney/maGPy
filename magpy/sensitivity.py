@@ -864,26 +864,3 @@ class Sensitivity:
         Rwno1[self.w] = self.xw
         self.Rw = np.append([1.0], Rwno1)
 
-        
-    def to_file(self, filename):
-        print("== Results to file ==")
-        f=open(filename, 'w')
-
-        if self.done["unc"] == True :
-            f.write("EE " + str(self.uE) +"\n")
-            f.write("VE " + str(self.uV) +"\n")
-            f.write("EV "+ str(self.uEV) +"\n")
-        
-        if self.done["sen"] == True :
-            f.write("EVw " + ' '.join(map(str,self.senseindex)) +"\n")
-
-        if self.done["TEV"] == True:
-            f.write("EVTw " + ' '.join(map(str,self.EVTw)) +"\n")
-
-        if self.done["ME"]  == True :
-            f.write("xw "+' '.join(map(str,\
-                [i for i in np.linspace(0.0,1.0,self.effect[0].size)] ))+"\n")
-            for i in range(0, len(self.m)):
-                f.write("ME"+str(i)+" "+ ' '.join(map(str,self.effect[i])) + "\n")
-        
-        f.close()
