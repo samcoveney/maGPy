@@ -35,7 +35,7 @@ class Wave:
 
     ## pickle a list of relevant data
     def save(self, filename):
-        print("Pickling wave data in", filename, "...")
+        print("= Pickling wave data in", filename, "=")
         w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax ]
         with open(filename, 'wb') as output:
             pickle.dump(w, output, pickle.HIGHEST_PROTOCOL)
@@ -43,7 +43,7 @@ class Wave:
 
     ## unpickle a list of relevant data
     def load(self, filename):
-        print("Unpickling wave data in", filename, "...")
+        print("= Unpickling wave data in", filename, "=")
         with open(filename, 'rb') as input:
             w = pickle.load(input)
         self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax = [i for i in w]
@@ -63,15 +63,13 @@ class Wave:
 
     ## search through the test inputs to find non-implausible points
     def calcImp(self, chunkSize=10000):
-
         P = self.TESTS[:,0].size
+        print("= Calculating Implausibilities of", P, "points =")
         if P > chunkSize:
             chunkNum = int(np.ceil(P / chunkSize))
-            print("  Calculating Implausibilities of", P, "points in",\
-                    chunkNum, "chunks of", chunkSize, "...")
+            print("  Using", chunkNum, "chunks of", chunkSize, "=")
         else:
             chunkNum = 1
-            print("  Calculating Implausibilities of", P, "points...")
 
         ## loop over outputs (i.e. over emulators)
         printProgBar(0, len(self.emuls)*chunkNum, prefix = '  Progress:', suffix = '')
@@ -94,8 +92,8 @@ class Wave:
 
     ## recalculate imp using stored pmean and pvar values (presumably user changed z & v
     def recalcImp(self):
-        print("\nRecalculating Implausibilities using stored posterior means and variances")
-        print("WARNING: this will be less accurate since posterior only stored as float16")
+        print("\n= Recalculating Implausibilities using stored posterior means and variances =")
+        print("█ WARNING: this will be less accurate since posterior only stored as float16")
         for o in range(len(self.emuls)):
             z, v = self.zs[o], self.var[o]
             self.I[:,o] = np.sqrt( ( self.pm[:,o] - z )**2 / ( self.pv[:,o] + v ) )
@@ -105,54 +103,37 @@ class Wave:
     def findNIMP(self, maxno=1):
 
         if self.doneImp == False:
-            print("WARNING: implausibilities must first be calculated with calcImp()")
+            print("ERROR: implausibilities must first be calculated with calcImp()")
             return
 
         P = self.TESTS[:,0].size
         ## find maximum implausibility across different outputs
-        print("Determining", maxno, "max'th implausibility...")
+        print("  Determining", maxno, "max'th implausibility...")
         Imaxes = np.partition(self.I, -maxno)[:,-maxno]
 
         ## check cut-off, store indices of points matching condition
         self.NIMP = np.argwhere(Imaxes < self.cm)[:,0]
         percent = ("{0:3.2f}").format(100*float(len(self.NIMP))/float(P))
-        print("NIMP fraction:", percent, "%  (", len(self.NIMP), "points )" )
+        print("  NIMP fraction:", percent, "%  (", len(self.NIMP), "points )" )
 
         ## store minmax of NIMP points along each dimension
         for i in range(self.TESTS.shape[1]):
             NIMPmin = np.amin(self.TESTS[self.NIMP,i])
             NIMPmax = np.amax(self.TESTS[self.NIMP,i])
             self.NIMPminmax[i] = [NIMPmin, NIMPmax]
-        print("NIMPminmax:", self.NIMPminmax)
+        #print("  NIMPminmax:", self.NIMPminmax)
 
         return
 
-    ## return non-implausible points in original units
-    def getNIMP(self):
-        minmax = self.emuls[0].Data.minmax
-        if self.NIMP == []:
-            print("WARNING: non-implausible points must be found first with findNIMP()")
-            return
-
-        ## unscale the inputs
-        unscaledNIMP = np.empty([self.NIMP.shape[0], self.TESTS.shape[1]])
-        for i in range(self.TESTS.shape[1]):
-            unscaledNIMP[:,i] = \
-                self.TESTS[self.NIMP][:,i] * (minmax[i][1] - minmax[i][0]) + minmax[i][0]
-                              
-        return unscaledNIMP
-
     ## fill out NROY space to use as tests for next wave
-    ####    NOTES : have findNROY with scaled units, and getNROY to return in original units? This relates to how to supply the original TESTS... if supplied in UNSCALED units by user, it may be easier
-    ####    NOTE : I should discard values outside the original minmax (of tests) range too
     def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=10000, NROY=False):
 
         if NROY == False:
-            print("= Creating NROY cloud from NIMP points =")
+            print("= Creating", howMany, "NROY cloud from", self.NIMP.size , "NIMP points =")
             LOC = self.TESTS[self.NIMP]
             dic = self.NIMPminmax
         else:
-            print("= Creating new NROY cloud from current NROY points =")
+            print("= Creating", howMany, "NROY cloud from", self.NROY.shape[0], "NROY points =")
             LOC = self.NROY
             dic = self.NROYminmax
         SCALE = np.array( [dic[mm][1]-dic[mm][0] for mm in dic] )
@@ -161,51 +142,73 @@ class Wave:
         NUM = int(np.ceil( howMany / self.NIMP.shape[0] ))
 
         print("  Generating (scaled) normal samples within original search range...")
+        minmax = self.emuls[0].Data.minmaxScaled
+        minlist = [minmax[key][0] for key in minmax]
+        maxlist = [minmax[key][1] for key in minmax]
         printProgBar(0, howMany, prefix = '  Progress:', suffix = '')
-        NROY = np.random.normal(loc=LOC, scale=SCALE)
+        NROY = np.zeros([0,self.NROY.shape[1]])
         condition = True
         while condition:
+            ## only original (NIMP or NROY) when findNROY called are used as seeds
+            ## this is because those points have already been found to be non-imp
             temp = np.random.normal(loc=LOC, scale=SCALE)
+
+            ## discard values outside of original minmax range here
+            minFilter = np.prod( (temp > minlist) , axis=1 )
+            maxFilter = np.prod( (temp < maxlist) , axis=1 )
+            temp = (temp[minFilter*maxFilter == 1])
+
+            ## add viable points to NROY (tested for imp below)
             NROY = np.concatenate((NROY, temp), axis=0)
-
-            ## NOTE : DISCARD VALUES OUTSIDE OF ORIGINAL MINMAX RANGE HERE
-            minmax = self.emuls[0].Data.minmaxScaled
-            minlist = [minmax[key][0] for key in minmax]
-            maxlist = [minmax[key][1] for key in minmax]
-
-            minFilter = np.prod( (NROY > minlist) , axis=1 )
-            maxFilter = np.prod( (NROY < maxlist) , axis=1 )
-
-            lost = (NROY[minFilter*maxFilter == 0])
-            NROY = (NROY[minFilter*maxFilter == 1])
 
             condition = NROY.shape[0] < howMany
             printProgBar(NROY.shape[0], howMany, prefix = '  Progress:', suffix = '')
 
-            ## checks
-            #print("NROY:", NROY.shape[0], "lost:", lost.shape[0], "condition:", condition)
+            ## not great method
+            ## set values outside of original minmax range to range edge
+            #temp = np.random.normal(loc=LOC, scale=SCALE)
+            #minFilter = temp < minlist
+            #temp[minFilter] = np.repeat([minlist], temp.shape[0], axis=0)[minFilter]
+            #maxFilter = temp > maxlist
+            #temp[maxFilter] = np.repeat([maxlist], temp.shape[0], axis=0)[maxFilter]
+            #NROY = np.concatenate((NROY, temp), axis=0)
 
         ## hack part 1
         TEMP = [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax]
 
         self.setTests(NROY)
         self.calcImp(chunkSize=chunkSize)
-        self.findNIMP()
+        self.findNIMP(maxno=maxno) # use to get indices of NROY that are imp < cutoff
 
         self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 )
-        print("NROY has", self.NROY.shape[0], "points, including original",
-              LOC.shape[0], "NIMP points")
+        print("  NROY has", self.NROY.shape[0], "points, including original",
+              LOC.shape[0], "seed points")
 
-        ## store minmax of NIMP points along each dimension
+        ## store minmax of NROY points along each dimension
         for i in range(self.NROY.shape[1]):
             NROYmin = np.amin(self.NROY[:,i])
             NROYmax = np.amax(self.NROY[:,i])
             self.NROYminmax[i] = [NROYmin, NROYmax]
-        print("NROYminmax:", self.NROYminmax)
+        #print("  NROYminmax:", self.NROYminmax)
 
         ## hack part 2
         [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax] = TEMP
         #self.findNIMP() ## ideally I don't want to have to recall this... IS THERE A NEED?
+
+    ## return supplied points in original units
+    def unscale(self, points):
+        print("= Unscaling points into original units =")
+        if points.shape[1] != self.TESTS.shape[1]:
+            print("ERROR: features of suppled points and TEST inputs don't match")
+            return
+        minmax = self.emuls[0].Data.minmax
+
+        ## unscale the points (probably supplied either NIMP subset or NROY subset)
+        unscaledPoints = np.empty(points.shape)
+        for i in range(points.shape[1]):
+            unscaledPoints[:,i] = minmax[i][0] + points[:,i] * (minmax[i][1] - minmax[i][0])
+                              
+        return unscaledPoints
 
 ## colormaps
 def myGrey():
@@ -231,11 +234,11 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
     ## option to plot NROY against ODP
     if NROY == True and wave.NROY == []:
-        print("WARNING: cannot using NROY = True because NROY not calculated")
+        print("█ WARNING: cannot using NROY = True because NROY not calculated")
     if globalColorbar == True and odpMax == None:
-        print("WARNING: odpMax must be set to use globalColorBar")
+        print("█ WARNING: odpMax must be set to use globalColorBar")
     if globalColorbar == True and NROY == True:
-        print("WARNING: cannot use NROY with globalColorBar")
+        print("█ WARNING: cannot use NROY with globalColorBar")
 
     ## make list of all the active indices across all emulators
     active = []
@@ -243,7 +246,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         for a in e.Data.active:
             if a not in active: active.append(a)
     active.sort()
-    print("ACTIVE:", active)
+    print("  ACTIVE:", active)
 
     ## restrict to smaller set of active indices
     if activeId != []:
@@ -257,7 +260,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
     ## reference global index into subplot index
     pltRef = {}
     for count, key in enumerate(active): pltRef[key] = count
-    print("PLTREF:", pltRef)
+    print("  PLTREF:", pltRef)
 
     minmax = wave.emuls[0].Data.minmax
 
@@ -266,28 +269,28 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
     for i in active:
         for j in active:
             if i!=j and i<j and [i,j] not in gSets:  gSets.append([i,j])
-    print("GLOBAL SETS:", gSets)
+    print("  GLOBAL SETS:", gSets)
 
     if replot == False:
 
         ## determine the max'th Implausibility
-        print("Determining", maxno, "max'th implausibility...")
+        print("  Determining", maxno, "max'th implausibility...")
         Imaxes = np.partition(wave.I, -maxno)[:,-maxno]
 
         ## space for all plots, and reference index to subplot indices
-        print("Creating HM plot objects...")
+        print("  Creating HM plot objects...")
         rc = len(active)
         fig, ax = plt.subplots(nrows = rc, ncols = rc)
 
         ## set colorbar bounds
         impCB = [0, wave.cm] if impMax == None else [0.0, impMax]
         if odpMax == None and globalColorbar == True:
-            print("WARNING: cannot use globalColorbar without specifying odpMax for ODP colorbar")
+            print("█ WARNING: cannot use globalColorbar without specifying odpMax for ODP colorbar")
             globalColorbar = False
         odpCB = [0.00000001, None] if odpMax == None else [0.00000001, odpMax]
         #odpCB = [None, None] if odpCB == [] else odpCB
 
-        print("Making subplots of paired indices...")
+        print("  Making subplots of paired indices...")
         ## loop over plot_bins()
         minCB, maxCB = 1.0, 0.0  ## set backwards here as initial values to be beaten
         printProgBar(0, len(gSets), prefix = '  Progress:', suffix = '')
@@ -340,7 +343,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
             printProgBar(i+1, len(gSets), prefix = '  Progress:', suffix = '')
 
-        print("ODP range:", minCB, ":", maxCB)
+        print("  ODP range:", minCB, ":", maxCB)
 
         ## global colorbars
         if globalColorbar == True and odpMax != None and NROY == False:
@@ -365,7 +368,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         #plt.tight_layout()
 
     else:
-        print("Unpickling plot in", filename, "...")
+        print("  Unpickling plot in", filename, "...")
         fig, ax = pickle.load(open(filename,'rb'))  # load plot
 
     pickle.dump([fig, ax], open(filename, 'wb'))  # save plot
@@ -373,7 +376,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
     ## plots points
     if points is not []:
-        print("Plotting points as well...")
+        print("  Plotting points as well...")
         for p in points:
             for s in gSets:
                 ax[pltRef[s[1]],pltRef[s[0]]].scatter(p[s[0]], p[s[1]], s=15, c='black')
