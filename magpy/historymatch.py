@@ -62,7 +62,7 @@ class Wave:
 
 
     ## search through the test inputs to find non-implausible points
-    def calcImp(self, chunkSize=10000):
+    def calcImp(self, chunkSize=5000):
         P = self.TESTS[:,0].size
         print("= Calculating Implausibilities of", P, "points =")
         if P > chunkSize:
@@ -126,7 +126,7 @@ class Wave:
         return
 
     ## fill out NROY space to use as tests for next wave
-    def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=10000, NROY=False):
+    def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=5000, NROY=False):
 
         if NROY == False:
             print("= Creating", howMany, "NROY cloud from", self.NIMP.size , "NIMP points =")
@@ -146,12 +146,21 @@ class Wave:
         minlist = [minmax[key][0] for key in minmax]
         maxlist = [minmax[key][1] for key in minmax]
         printProgBar(0, howMany, prefix = '  Progress:', suffix = '')
-        NROY = np.zeros([0,self.NROY.shape[1]])
+        NROY = np.zeros([0,self.TESTS.shape[1]])
         condition = True
         while condition:
             ## only original (NIMP or NROY) when findNROY called are used as seeds
             ## this is because those points have already been found to be non-imp
             temp = np.random.normal(loc=LOC, scale=SCALE)
+
+            ## try new method to help with troublesome rands going over minmax range
+            minFilter = temp < minlist
+            maxFilter = temp > maxlist
+            for i in range(temp.shape[0]):
+                temp[i,minFilter[i]] = \
+                  np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
+                temp[i,maxFilter[i]] = \
+                  np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
 
             ## discard values outside of original minmax range here
             minFilter = np.prod( (temp > minlist) , axis=1 )
@@ -162,7 +171,8 @@ class Wave:
             NROY = np.concatenate((NROY, temp), axis=0)
 
             condition = NROY.shape[0] < howMany
-            printProgBar(NROY.shape[0], howMany, prefix = '  Progress:', suffix = '')
+            printProgBar(NROY.shape[0] if condition else howMany, howMany,
+                         prefix = '  Progress:', suffix = '')
 
             ## not great method
             ## set values outside of original minmax range to range edge
@@ -209,6 +219,21 @@ class Wave:
             unscaledPoints[:,i] = minmax[i][0] + points[:,i] * (minmax[i][1] - minmax[i][0])
                               
         return unscaledPoints
+
+    ## return supplied points in scaled units
+    def scale(self, points):
+        print("= Unscaling points into original units =")
+        if points.shape[1] != self.TESTS.shape[1]:
+            print("ERROR: features of suppled points and TEST inputs don't match")
+            return
+        minmax = self.emuls[0].Data.minmax
+
+        ## unscale the points (probably supplied either NIMP subset or NROY subset)
+        scaledPoints = np.empty(points.shape)
+        for i in range(points.shape[1]):
+            scaledPoints[:,i] = (points[:,i] - minmax[i][0]) / (minmax[i][1] - minmax[i][0])
+                              
+        return scaledPoints
 
 ## colormaps
 def myGrey():
