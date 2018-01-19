@@ -5,7 +5,7 @@ from scipy.optimize import minimize, check_grad
 
 from magpy._utils import *
 
-np.set_printoptions(precision=6)
+np.set_printoptions(precision=3)
 np.set_printoptions(suppress=True)
 
 ## progress bar
@@ -173,15 +173,26 @@ def loglikelihood_mucm(guess, E, SigmaBeta=False, debug=False):
 def optimize(E, tries=1, bounds={}, constraints={}, message=False):
     print("= Optimizing emulator parameters =")
 
+    ## formatter for printing fitting results
+    print("  +++++ means > 1e+3, ----- means < 1e-3")
+    fmt = lambda x: '+++++' if abs(x) > 1e3 else '-----' if abs(x) < 1e-3 else str(x)[:5] % x
+    hdr, bhdr = "       | ", "       |   b   | "
+    for i,d in enumerate(E.GP.delta):
+        hdr = hdr + " d" + str(E.Data.active[i]).zfill(2) + " " + " | "
+    for i,b in enumerate(E.Basis.beta[1:]):
+        bhdr = bhdr + " b" + str(i).zfill(2) + " " + " | "
+
     ## build full dictionary of bounds for active HPs
     bDic = {}
     for a in E.Data.active: bDic[a] = bounds[a] if a in bounds else [0.01,1.0]
     if E.GP.fixNugget == False:
-        bDic['n'] = bounds['n'] if 'n' in bounds else [0.00000001,1.0]
+        bDic['n'] = bounds['n'] if 'n' in bounds else [1e-8,1.0]
+        hdr = hdr + " nug " + " | "
     if E.GP.mucm == False:
         # could have better initial bounds for sigma
         temp = np.sqrt( np.amax(E.Data.yT) - np.amin(E.Data.yT) )
-        bDic['s'] = bounds['s'] if 's' in bounds else [0.1, temp]
+        bDic['s'] = bounds['s'] if 's' in bounds else [0.1, float(str(temp)[:5])]
+        hdr = hdr + " sig " + " | "
     print("  Bounds:", bDic)
 
     ## set constraints dictionary
@@ -214,14 +225,17 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
     ## guess loop
     guess = np.zeros(len(boundsTemp))
     firstTry, bestMin = True, 10000000.0
+    print(hdr) # print headers
     #printProgBar(0, tries, prefix = 'Progress:', suffix = '')
     for t in range(tries):
 
         for i,b in enumerate(boundsTemp):
             guess[i] = E.GP.K.transform(b[0]+(b[1]-b[0])*np.random.rand())
  
-        initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
-        print("\n  Guess: ", initGuess)
+        #initGuess = np.around(E.GP.K.untransform(guess),decimals=4)
+        #print("\n  Guess: ", initGuess)
+        initGuess = E.GP.K.untransform(guess)
+        if message: print("\nGuess: | %s" % ' | '.join(map(str, [fmt(i) for i in initGuess])) + " |")
         printProgBar(t, tries, prefix = '  Progress:')
  
         nonPSDfail = False
@@ -255,12 +269,15 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
             if notFit:  print("  WARNING: Only 1 iteration, not fit.")
             if res.success == False:
                 print("  WARNING: Bad termination for", E.GP.K.untransform(guess), "not fit.")
-            if message: print(res, "\n")
+            if message: print(res)
 
             ## result of fit
             if notFit == False and res.success == True:
-                HP = np.around(E.GP.K.untransform(res.x),decimals=4)
-                print("  => HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
+                #HP = np.around(E.GP.K.untransform(res.x),decimals=4)
+                #print("  => HP: ", HP, " llh: ", -1.0*np.around(res.fun,decimals=4))
+                HP = E.GP.K.untransform(res.x)
+                print("   HP: | %s" % ' | '.join(map(str, [fmt(i) for i in HP])),\
+                        "| llh: ", -1.0*np.around(res.fun,decimals=4))
                 
                 ## set best result
                 if (res.fun < bestMin or firstTry)\
@@ -284,14 +301,19 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
 
         E.GP.makeA()
 
-        for i,d in enumerate(E.GP.delta):
-            print("  Best Delta", E.Data.active[i], ":", d)
-        print("  Best Nugget:", E.GP.nugget)
-        if E.GP.mucm == True:
-            print("  MUCM Sigma:", E.GP.sigma)
-        else:
-            print("  Best Sigma:", E.GP.sigma)
-        print("  Beta:", E.Basis.beta)
+        print("  nug: | ", E.GP.nugget, " |")
+        print(hdr) # print headers
+        print("   HP: | %s" % ' | '.join(map(str, [fmt(i) for i in bestHP])) + " |" )
+        print(bhdr)
+        print(" Beta: | %s" % ' | '.join(map(str, [fmt(i) for i in E.Basis.beta])) + " |" )
+
+        #for i,d in enumerate(E.GP.delta):
+        #    print("  Best Delta", E.Data.active[i], ":", d)
+        #print("  Best Nugget:", E.GP.nugget)
+        #if E.GP.mucm == True:
+        #    print("  MUCM Sigma:", E.GP.sigma)
+        #else:
+        #    print("  Best Sigma:", E.GP.sigma)
 
     else:
         print("  ERROR: No optimization was made.")
