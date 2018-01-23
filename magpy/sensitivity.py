@@ -132,6 +132,10 @@ def sense_table(E_list, sense_list, inputNames=[], outputNames=[], rowHeight=6):
 
     return None
 
+## format
+def fmt(x):
+    return str(x)[:5] % x
+
 
 class Sensitivity:
     def __init__(self, E, m, v):
@@ -160,6 +164,9 @@ class Sensitivity:
         self.G = linalg.cho_solve(L, self.H)
         self.W = np.linalg.inv( (self.H.T).dot(self.G) )
 
+        ## save emulator Data.active (translates local into global indices)
+        self.active = E.Data.active
+
         ### for saving to file -- set to true when functions have run
         self.done = {"unc": False, "sen": False, "ME": False, "int": False, "TEV": False}
 
@@ -181,9 +188,9 @@ class Sensitivity:
     def results(self):
         print("= UQSA results =")
         if self.done["unc"]:
-            print("  E*[ E[f(X)] ]  :",self.uE)
-            print("  var*[ E[f(X)] ]:",self.uV)
-            print("  E*[ var[f(X)] ]:",self.uEV)
+            print("   E*{E[f(X)]} :", self.uE)
+            print("   V*{E[f(X)]} :", self.uV)
+            print("   E*{V[f(X)]} :", self.uEV)
         if self.done["sen"]:
             for i, SI in enumerate(self.senseindex):
                 if self.done["unc"]:  print("  E(V" + str(i) +")/EV:", SI/self.uEV)
@@ -429,9 +436,9 @@ class Sensitivity:
 
         self.uEV = (self.I1-self.uV) + (self.I2 -self.uE**2)
         
-        print("  E*[ E[f(X)] ]  :",self.uE)
-        print("  var*[ E[f(X)] ]:",self.uV)
-        print("  E*[ var[f(X)] ]:",self.uEV)
+        print("   E*{E[f(X)]} :", fmt(self.uE))
+        print("   V*{E[f(X)]} :", fmt(self.uV))
+        print("   E*{V[f(X)]} :", fmt(self.uEV))
 
 
     #### utility functions to simplify code ####
@@ -619,7 +626,7 @@ class Sensitivity:
 
         #### to get MUCM ans, assume MUCM wrong, and this value is uEV
         self.EVf = self.uEV
-        print("  E*[ var[f(X)] ]:",self.EVf)
+        print("  E*[ V[f(X)] ]:",self.EVf)
 
         self.initialise_matrices()
         
@@ -717,15 +724,25 @@ class Sensitivity:
 
             self.EVint = self.EEE - self.EE2
 
-
-            if self.done["unc"]:
-                print("  E(V" + str(self.w) +")/EV:", self.EVint/self.uEV)
-            else:
-                print("  E(V" + str(self.w) +"):", self.EVint)
+            #if self.done["unc"]:
+            #    print("  E(V" + str(self.w) +")/EV:", self.EVint/self.uEV)
+            #else:
+            #    print("  E(V" + str(self.w) +"):", self.EVint)
             self.senseindex[P] = self.EVint
 
+        #if self.done["unc"]:
+        #    print("  SUM:" , np.sum(self.senseindex/self.uEV))
+
+        ## format printing
+        hdr = "       | "
+        for i,s in enumerate(self.senseindex):
+            hdr = hdr + " s" + str(self.active[i]).zfill(2) + " " + " | "
+
+        print(hdr)
         if self.done["unc"]:
-            print("  SUM:" , np.sum(self.senseindex/self.uEV))
+            print("   SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex/self.uEV])), "| SUM:" , fmt(np.sum(self.senseindex/self.uEV)) )
+        else:
+            print("   SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex])), "|")
 
 
     def UPSQRT_const(self):
