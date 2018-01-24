@@ -31,12 +31,13 @@ class Wave:
         self.NIMPminmax = {}
         self.NROY = []  # create a design to fill NROY space based of found NIMP points
         self.NROYminmax = {}
+        self.NROY_I = [] # for storing NROY implausibility
 
 
     ## pickle a list of relevant data
     def save(self, filename):
         print("= Pickling wave data in", filename, "=")
-        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax ]
+        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I ]
         with open(filename, 'wb') as output:
             pickle.dump(w, output, pickle.HIGHEST_PROTOCOL)
         return
@@ -46,7 +47,7 @@ class Wave:
         print("= Unpickling wave data in", filename, "=")
         with open(filename, 'rb') as input:
             w = pickle.load(input)
-        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax = [i for i in w]
+        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I = [i for i in w]
         return
 
     ## set the test data
@@ -97,6 +98,8 @@ class Wave:
         for o in range(len(self.emuls)):
             z, v = self.zs[o], self.var[o]
             self.I[:,o] = np.sqrt( ( self.pm[:,o] - z )**2 / ( self.pv[:,o] + v ) )
+        if len(self.NROY) > 0:
+            print("█ WARNING: NROY should be reset with findNROY(..., restart=True)")
         return
 
     ## find all the non-implausible points in the test points
@@ -117,18 +120,26 @@ class Wave:
         print("  NIMP fraction:", percent, "%  (", len(self.NIMP), "points )" )
 
         ## store minmax of NIMP points along each dimension
-        for i in range(self.TESTS.shape[1]):
-            NIMPmin = np.amin(self.TESTS[self.NIMP,i])
-            NIMPmax = np.amax(self.TESTS[self.NIMP,i])
-            self.NIMPminmax[i] = [NIMPmin, NIMPmax]
+        if self.NIMP.shape[0] > 0:
+            for i in range(self.TESTS.shape[1]):
+                NIMPmin = np.amin(self.TESTS[self.NIMP,i])
+                NIMPmax = np.amax(self.TESTS[self.NIMP,i])
+                self.NIMPminmax[i] = [NIMPmin, NIMPmax]
+        else:
+            print("  No points in NIMP, send NIMPminmax to [None, None]")
+            for i in range(self.TESTS.shape[1]):
+                self.NIMPminmax[i] = [None, None]
         #print("  NIMPminmax:", self.NIMPminmax)
 
         return
 
     ## fill out NROY space to use as tests for next wave
-    def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=5000, NROY=False):
-
-        if NROY == False:
+    def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=5000, restart=False):
+        howMany = int(howMany)
+        if restart == True or len(self.NROY) == 0:
+            if len(self.NROY) > 0:
+                print("= Setting NROY blank, start from NIMP points")
+                self.NROY, self.NROY_I = [], []
             print("= Creating", howMany, "NROY cloud from", self.NIMP.size , "NIMP points =")
             LOC = self.TESTS[self.NIMP]
             dic = self.NIMPminmax
@@ -193,6 +204,12 @@ class Wave:
         self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 )
         print("  NROY has", self.NROY.shape[0], "points, including original",
               LOC.shape[0], "seed points")
+        if len(self.NROY_I) > 0:
+            self.NROY_I = np.concatenate( (self.I[self.NIMP], self.NROY_I), axis=0 )
+        else:
+            self.NROY_I = np.concatenate( (self.I[self.NIMP], TEMP[3][TEMP[4]]), axis=0 )
+
+        print("HERE:", self.NROY.shape, self.NROY_I.shape)
 
         ## store minmax of NROY points along each dimension
         for i in range(self.NROY.shape[1]):
@@ -300,7 +317,15 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
         ## determine the max'th Implausibility
         print("  Determining", maxno, "max'th implausibility...")
+        T = wave.TESTS
         Imaxes = np.partition(wave.I, -maxno)[:,-maxno]
+        if NROY == True:
+            T = np.concatenate( (T, wave.NROY), axis=0)
+            Imaxes = np.concatenate( (Imaxes, np.partition(wave.NROY_I, -maxno)[:,-maxno]), axis=0)
+
+        print(wave.TESTS.shape, wave.I.shape)
+        print(wave.NROY.shape, wave.NROY_I.shape)
+        print(T.shape, Imaxes.shape)
 
         ## space for all plots, and reference index to subplot indices
         print("  Creating HM plot objects...")
@@ -327,27 +352,37 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             impPlot, odpPlot = ax[pltRef[s[1]],pltRef[s[0]]], ax[pltRef[s[0]],pltRef[s[1]]]
 
             impPlot.patch.set_facecolor(myGrey())
-            if NROY == False or wave.NROY == []:
+            if NROY == False:
                 im_imp = impPlot.hexbin(
-                  wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
+                  #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
+                  T[:,s[0]], T[:,s[1]], C = Imaxes,
                   gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
                   extent=ex,
                   reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
+
+                odpPlot.patch.set_facecolor(myGrey())
+                im_odp = odpPlot.hexbin(
+                  T[:,s[0]], T[:,s[1]],
+                  C = Imaxes<wave.cm,
+                  #gridsize=grid, bins='log', cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
+                  gridsize=grid, cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
+                  extent=ex,
+                  linewidths=linewidths, mincnt=1)
             else:
+                # for NROY, combine tests and NROY to get a better picture
                 im_imp = impPlot.hexbin(
+                  T[:,s[0]], T[:,s[1]], C = Imaxes,
+                  gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
+                  extent=ex,
+                  reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
+
+                # for NROY this is just a density plot of the NROY points
+                odpPlot.patch.set_facecolor(myGrey())
+                im_odp = odpPlot.hexbin(
                   wave.NROY[:,s[0]], wave.NROY[:,s[1]],
                   gridsize=grid, cmap='inferno',
                   extent=ex,
                   linewidths=linewidths, mincnt=1)
-
-            odpPlot.patch.set_facecolor(myGrey())
-            im_odp = odpPlot.hexbin(
-              wave.TESTS[:,s[0]], wave.TESTS[:,s[1]],
-              C = Imaxes<wave.cm,
-              #gridsize=grid, bins='log', cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
-              gridsize=grid, cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
-              extent=ex,
-              linewidths=linewidths, mincnt=1)
 
             ## save min and max of ODP, useful user info for making global plot
             CBmin, CBmax = np.min(im_odp.get_array()) , np.max(im_odp.get_array())
