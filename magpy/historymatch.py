@@ -135,92 +135,97 @@ class Wave:
 
     ## fill out NROY space to use as tests for next wave
     def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=5000, restart=False):
-        howMany = int(howMany)
-        if restart == True or len(self.NROY) == 0:
-            if len(self.NROY) > 0:
-                print("= Setting NROY blank, start from NIMP points")
-                self.NROY, self.NROY_I = [], []
+
+        ## reset if requested
+        if restart == True:
+            print("= Setting NROY blank, start from NIMP points")
+            self.NROY, self.NROY_I = [], []
+
+        if len(self.NROY) == 0:
+            # initially, add NIMP to NROY
+            self.NROY = self.TESTS[self.NIMP]
+            self.NROYminmax = self.NIMPminmax
             print("= Creating", howMany, "NROY cloud from", self.NIMP.size , "NIMP points =")
-            LOC = self.TESTS[self.NIMP]
-            dic = self.NIMPminmax
         else:
+            # if we're recalling this routine, begin with known NROY point
             print("= Creating", howMany, "NROY cloud from", self.NROY.shape[0], "NROY points =")
-            LOC = self.NROY
-            dic = self.NROYminmax
-        SCALE = np.array( [dic[mm][1]-dic[mm][0] for mm in dic] )
-        SCALE = SCALE * factor
 
-        NUM = int(np.ceil( howMany / self.NIMP.shape[0] ))
+        ## exit if condition already satisfied
+        if howMany <= self.NROY.shape[0]:
+            print("  Already have", self.NROY.shape[0], "/", howMany, "requested NROY points")
+            return
 
-        print("  Generating (scaled) normal samples within original search range...")
-        minmax = self.emuls[0].Data.minmaxScaled
-        minlist = [minmax[key][0] for key in minmax]
-        maxlist = [minmax[key][1] for key in minmax]
-        printProgBar(0, howMany, prefix = '  Progress:', suffix = '')
-        NROY = np.zeros([0,self.TESTS.shape[1]])
-        condition = True
-        while condition:
-            ## only original (NIMP or NROY) when findNROY called are used as seeds
-            ## this is because those points have already been found to be non-imp
-            temp = np.random.normal(loc=LOC, scale=SCALE)
+        ## OUTER LOOP - HOW MANY POINTS NEEDED IN TOTAL
+        howMany = int(howMany)
+        printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
+        while self.NROY.shape[0] < howMany:
 
-            ## try new method to help with troublesome rands going over minmax range
-            minFilter = temp < minlist
-            maxFilter = temp > maxlist
-            for i in range(temp.shape[0]):
-                temp[i,minFilter[i]] = \
-                  np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
-                temp[i,maxFilter[i]] = \
-                  np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
+            toTest = int(self.NROY.shape[0] * 1) # create as many points to test as NROY 
+        
+            # now LOC and dic can just use NROY in all cases
+            LOC, dic = self.NROY, self.NROYminmax
 
-            ## discard values outside of original minmax range here
-            minFilter = np.prod( (temp > minlist) , axis=1 )
-            maxFilter = np.prod( (temp < maxlist) , axis=1 )
-            temp = (temp[minFilter*maxFilter == 1])
+            ## scale factor for normal distribution
+            SCALE = np.array( [dic[mm][1]-dic[mm][0] for mm in dic] )
+            SCALE = SCALE * factor
 
-            ## add viable points to NROY (tested for imp below)
-            NROY = np.concatenate((NROY, temp), axis=0)
+            ## we won't accept value beyond the emulator ranges
+            print("  Generating (scaled) normal samples within original search range...")
+            minmax = self.emuls[0].Data.minmaxScaled
+            minlist = [minmax[key][0] for key in minmax]
+            maxlist = [minmax[key][1] for key in minmax]
 
-            condition = NROY.shape[0] < howMany
-            printProgBar(NROY.shape[0] if condition else howMany, howMany,
-                         prefix = '  Progress:', suffix = '')
+            ## initial empty structure to append 'candidate' points to
+            NROY = np.zeros([0,self.TESTS.shape[1]])
 
-            ## not great method
-            ## set values outside of original minmax range to range edge
-            #temp = np.random.normal(loc=LOC, scale=SCALE)
-            #minFilter = temp < minlist
-            #temp[minFilter] = np.repeat([minlist], temp.shape[0], axis=0)[minFilter]
-            #maxFilter = temp > maxlist
-            #temp[maxFilter] = np.repeat([maxlist], temp.shape[0], axis=0)[maxFilter]
-            #NROY = np.concatenate((NROY, temp), axis=0)
+            condition = True
+            while condition:
+                ## create random points - known NROY used as seeds
+                temp = np.random.normal(loc=LOC, scale=SCALE)
 
-        ## hack part 1
-        TEMP = [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax]
+                ## discard values outside of original minmax range here
+                minFilter = temp < minlist
+                maxFilter = temp > maxlist
+                for i in range(temp.shape[0]):
+                    temp[i,minFilter[i]] = \
+                      np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
+                    temp[i,maxFilter[i]] = \
+                      np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
+                minFilter = np.prod( (temp > minlist) , axis=1 )
+                maxFilter = np.prod( (temp < maxlist) , axis=1 )
+                temp = (temp[minFilter*maxFilter == 1])
 
-        self.setTests(NROY)
-        self.calcImp(chunkSize=chunkSize)
-        self.findNIMP(maxno=maxno) # use to get indices of NROY that are imp < cutoff
+                ## add viable test points to NROY (tested for imp below)
+                NROY = np.concatenate((NROY, temp), axis=0)
 
-        self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 )
-        print("  NROY has", self.NROY.shape[0], "points, including original",
-              LOC.shape[0], "seed points")
-        if len(self.NROY_I) > 0:
-            self.NROY_I = np.concatenate( (self.I[self.NIMP], self.NROY_I), axis=0 )
-        else:
-            self.NROY_I = np.concatenate( (self.I[self.NIMP], TEMP[3][TEMP[4]]), axis=0 )
+                condition = NROY.shape[0] < toTest
 
-        print("HERE:", self.NROY.shape, self.NROY_I.shape)
 
-        ## store minmax of NROY points along each dimension
-        for i in range(self.NROY.shape[1]):
-            NROYmin = np.amin(self.NROY[:,i])
-            NROYmax = np.amax(self.NROY[:,i])
-            self.NROYminmax[i] = [NROYmin, NROYmax]
-        #print("  NROYminmax:", self.NROYminmax)
+            ## hack part 1 - save the results of initial test points
+            TEMP = [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax]
 
-        ## hack part 2
-        [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax] = TEMP
-        #self.findNIMP() ## ideally I don't want to have to recall this... IS THERE A NEED?
+            self.setTests(NROY)
+            self.calcImp(chunkSize=chunkSize)
+            self.findNIMP(maxno=maxno) # use to get indices of NROY that are imp < cutoff
+
+            self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 )
+            printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
+            print("  NROY has", self.NROY.shape[0], "points, including original",
+                  LOC.shape[0], "seed points")
+            if len(self.NROY_I) > 0:
+                self.NROY_I = np.concatenate( (self.I[self.NIMP], self.NROY_I), axis=0 )
+            else:
+                self.NROY_I = np.concatenate( (self.I[self.NIMP], TEMP[3][TEMP[4]]), axis=0 )
+
+            ## store minmax of NROY points along each dimension
+            for i in range(self.NROY.shape[1]):
+                NROYmin = np.amin(self.NROY[:,i])
+                NROYmax = np.amax(self.NROY[:,i])
+                self.NROYminmax[i] = [NROYmin, NROYmax]
+            #print("  NROYminmax:", self.NROYminmax)
+
+            ## hack part 2 - reset these variables back to normal
+            [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax] = TEMP
 
     ## return supplied points in original units
     def unscale(self, points):
@@ -380,7 +385,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
                 odpPlot.patch.set_facecolor(myGrey())
                 im_odp = odpPlot.hexbin(
                   wave.NROY[:,s[0]], wave.NROY[:,s[1]],
-                  gridsize=grid, cmap='inferno',
+                  gridsize=grid, cmap = odpcolormap(), #  'inferno',
                   extent=ex,
                   linewidths=linewidths, mincnt=1)
 
