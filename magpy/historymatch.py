@@ -160,7 +160,8 @@ class Wave:
         printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
         while self.NROY.shape[0] < howMany:
 
-            toTest = int(self.NROY.shape[0] * 1) # create as many points to test as NROY 
+            ## TODO: don't seem to need now
+            #toTest = int(self.NROY.shape[0] * 1) # create as many points to test as NROY 
         
             # now LOC and dic can just use NROY in all cases
             LOC, dic = self.NROY, self.NROYminmax
@@ -178,27 +179,60 @@ class Wave:
             ## initial empty structure to append 'candidate' points to
             NROY = np.zeros([0,self.TESTS.shape[1]])
 
-            condition = True
-            while condition:
-                ## create random points - known NROY used as seeds
-                temp = np.random.normal(loc=LOC, scale=SCALE)
+            ## TODO: if using new internal condition, don't need this outer loop
+            #condition = True
+            #while condition:
+            ## create random points - known NROY used as seeds
+            temp = np.random.normal(loc=LOC, scale=SCALE)
+            print("initial temp:", temp.shape[0])
 
+            if False:
                 ## discard values outside of original minmax range here
-                minFilter = temp < minlist
-                maxFilter = temp > maxlist
-                for i in range(temp.shape[0]):
-                    temp[i,minFilter[i]] = \
-                      np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
-                    temp[i,maxFilter[i]] = \
-                      np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
-                minFilter = np.prod( (temp > minlist) , axis=1 )
-                maxFilter = np.prod( (temp < maxlist) , axis=1 )
-                temp = (temp[minFilter*maxFilter == 1])
+                ## TODO speed this up - only look at points not yet known to be okay
+                repeat = True
+                while repeat:
+                    minFilter = temp < minlist
+                    maxFilter = temp > maxlist
+                    for i in range(temp.shape[0]):
+                        temp[i,minFilter[i]] = \
+                          np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
+                        temp[i,maxFilter[i]] = \
+                          np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
+                    minFilter = np.prod( (temp > minlist) , axis=1 )
+                    maxFilter = np.prod( (temp < maxlist) , axis=1 )
+                    TEMP1 = (temp[minFilter*maxFilter == 1])
+                    if TEMP1.shape[0] >= LOC.shape[0]: repeat = False
+                    print(TEMP1.shape[0], LOC.shape[0])
+                    print("repeat:", repeat)
+            else:
+                A = temp
+                B = LOC
+                TEMP1 = np.zeros([0,self.TESTS.shape[1]])
+                repeat = True
+                while repeat:
+                    ## replace temp with A below
+                    minFilter = A < minlist
+                    maxFilter = A > maxlist
+                    for i in range(A.shape[0]):
+                        A[i,minFilter[i]] = \
+                          np.random.normal(loc=B[i,minFilter[i]], scale=SCALE[minFilter[i]])
+                        A[i,maxFilter[i]] = \
+                          np.random.normal(loc=B[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
+                    minFilter = np.prod( (A > minlist) , axis=1 )
+                    maxFilter = np.prod( (A < maxlist) , axis=1 )
+                    TEMP1 = np.concatenate( (TEMP1, A[minFilter*maxFilter == 1]), axis = 0)
+                    if TEMP1.shape[0] >= LOC.shape[0]: repeat = False
+                    #print(TEMP1.shape[0], B.shape[0])
+                    #print("repeat:", repeat)
+                    A = (A[minFilter*maxFilter == 0]) # now A only points that failed
+                    B = (B[minFilter*maxFilter == 0]) # now B only points that failed
+                    #print("shapes:", A.shape, B.shape)
 
-                ## add viable test points to NROY (tested for imp below)
-                NROY = np.concatenate((NROY, temp), axis=0)
+            ## add viable test points to NROY (tested for imp below)
+            NROY = np.concatenate((NROY, TEMP1), axis=0)
 
-                condition = NROY.shape[0] < toTest
+            #condition = NROY.shape[0] < toTest
+            #print("condition:", condition)
 
 
             ## hack part 1 - save the results of initial test points
