@@ -20,9 +20,9 @@ def posteriorSample(post):
 
 ## GP emulator class
 class Emulator:
-    """New attempt at representing emulator as a class"""
+    """GP Emulator class"""
     def __init__(self):
-        print("= I am a GP emulator..! =")
+        print("= GP emulator instance =")
 
         ## instances of nested classes
         self.Data = Emulator.Data()

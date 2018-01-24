@@ -10,6 +10,7 @@
 * NROY creation routine has confusing message when howmany is less than current nroy set
 
 ## sensitivity
+* fix sensitivity printing in results() function
 
 ## examples
 * Need a History Matching example

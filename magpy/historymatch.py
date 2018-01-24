@@ -80,7 +80,7 @@ class Wave:
             for c in range(chunkNum):
                 L = c*chunkSize
                 U = (c+1)*chunkSize if c < chunkNum -1 else P
-                post = E.posteriorPartial(self.TESTS[L:U], predict = True)
+                post = E.posteriorPartial(self.TESTS[L:U], predict = False)
                 pmean, pvar = post['mean'], post['var'] 
                 self.pm[L:U,o] = pmean
                 self.pv[L:U,o] = pvar
