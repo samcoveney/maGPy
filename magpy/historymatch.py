@@ -126,12 +126,12 @@ class Wave:
                 NIMPmax = np.amax(self.TESTS[self.NIMP,i])
                 self.NIMPminmax[i] = [NIMPmin, NIMPmax]
         else:
-            print("  No points in NIMP, send NIMPminmax to [None, None]")
+            print("  No points in NIMP, set NIMPminmax to [None, None]")
             for i in range(self.TESTS.shape[1]):
                 self.NIMPminmax[i] = [None, None]
         #print("  NIMPminmax:", self.NIMPminmax)
 
-        return
+        return 100*float(len(self.NIMP))/float(P)
 
     ## fill out NROY space to use as tests for next wave
     def findNROY(self, howMany, maxno=1, factor = 0.1, chunkSize=5000, restart=False):
@@ -209,7 +209,7 @@ class Wave:
             self.calcImp(chunkSize=chunkSize)
             self.findNIMP(maxno=maxno) # use to get indices of NROY that are imp < cutoff
 
-            self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 )
+            self.NROY = np.concatenate( (self.TESTS[self.NIMP], LOC), axis=0 ) # LOC = seeds
             printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
             print("  NROY has", self.NROY.shape[0], "points, including original",
                   LOC.shape[0], "seed points")
@@ -261,9 +261,11 @@ class Wave:
 def myGrey():
     return '#696988'
 
-def impcolormap():
+def impcolormap(cm):
+    #return colors.LinearSegmentedColormap.from_list('imp',
+    #  [(0, '#90ff3c'), (0.50, '#ffff3c'), (0.95, '#e2721b'), (1, '#db0100')], N=256)
     return colors.LinearSegmentedColormap.from_list('imp',
-      [(0, '#90ff3c'), (0.50, '#ffff3c'), (0.95, '#e2721b'), (1, '#db0100')], N=256)
+      [(0, '#90ff3c'), (1.0/cm, '#90ff3c'), (2.0/cm, '#ffff3c'), (cm/cm, '#db0100')], N=256)
 
 def odpcolormap():
     #[(0, myGrey()), (0.00000001, '#ffffff'),  # alternative first colours
@@ -358,7 +360,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             im_imp = impPlot.hexbin(
               #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
+              gridsize=grid, cmap=impcolormap(wave.cm), vmin=impCB[0], vmax=impCB[1],
               extent=ex,
               reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
 
@@ -367,14 +369,15 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
                   T[:,s[0]], T[:,s[1]],
                   C = Imaxes<wave.cm,
                   #gridsize=grid, bins='log', cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
-                  gridsize=grid, cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
+                  gridsize=grid, cmap='viridis', #odpcolormap(), 
+                  vmin=odpCB[0], vmax=odpCB[1],
                   extent=ex,
                   linewidths=linewidths, mincnt=1)
             else:
                 # for NROY this is just a density plot of the NROY points
                 im_odp = odpPlot.hexbin(
                   wave.NROY[:,s[0]], wave.NROY[:,s[1]],
-                  gridsize=grid, cmap = odpcolormap(), #  'inferno',
+                  gridsize=grid, cmap='viridis', # odpcolormap(),
                   extent=ex,
                   linewidths=linewidths, mincnt=1)
 
