@@ -159,9 +159,6 @@ class Wave:
         howMany = int(howMany)
         printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
         while self.NROY.shape[0] < howMany:
-
-            ## TODO: don't seem to need now
-            #toTest = int(self.NROY.shape[0] * 1) # create as many points to test as NROY 
         
             # now LOC and dic can just use NROY in all cases
             LOC, dic = self.NROY, self.NROYminmax
@@ -179,61 +176,31 @@ class Wave:
             ## initial empty structure to append 'candidate' points to
             NROY = np.zeros([0,self.TESTS.shape[1]])
 
-            ## TODO: if using new internal condition, don't need this outer loop
-            #condition = True
-            #while condition:
             ## create random points - known NROY used as seeds
             temp = np.random.normal(loc=LOC, scale=SCALE)
-            print("initial temp:", temp.shape[0])
 
-            if False:
-                ## discard values outside of original minmax range here
-                ## TODO speed this up - only look at points not yet known to be okay
-                repeat = True
-                while repeat:
-                    minFilter = temp < minlist
-                    maxFilter = temp > maxlist
-                    for i in range(temp.shape[0]):
-                        temp[i,minFilter[i]] = \
-                          np.random.normal(loc=LOC[i,minFilter[i]], scale=SCALE[minFilter[i]])
-                        temp[i,maxFilter[i]] = \
-                          np.random.normal(loc=LOC[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
-                    minFilter = np.prod( (temp > minlist) , axis=1 )
-                    maxFilter = np.prod( (temp < maxlist) , axis=1 )
-                    TEMP1 = (temp[minFilter*maxFilter == 1])
-                    if TEMP1.shape[0] >= LOC.shape[0]: repeat = False
-                    print(TEMP1.shape[0], LOC.shape[0])
-                    print("repeat:", repeat)
-            else:
-                A = temp
-                B = LOC
-                TEMP1 = np.zeros([0,self.TESTS.shape[1]])
-                repeat = True
-                while repeat:
-                    ## replace temp with A below
-                    minFilter = A < minlist
-                    maxFilter = A > maxlist
-                    for i in range(A.shape[0]):
-                        A[i,minFilter[i]] = \
-                          np.random.normal(loc=B[i,minFilter[i]], scale=SCALE[minFilter[i]])
-                        A[i,maxFilter[i]] = \
-                          np.random.normal(loc=B[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
-                    minFilter = np.prod( (A > minlist) , axis=1 )
-                    maxFilter = np.prod( (A < maxlist) , axis=1 )
-                    TEMP1 = np.concatenate( (TEMP1, A[minFilter*maxFilter == 1]), axis = 0)
-                    if TEMP1.shape[0] >= LOC.shape[0]: repeat = False
-                    #print(TEMP1.shape[0], B.shape[0])
-                    #print("repeat:", repeat)
-                    A = (A[minFilter*maxFilter == 0]) # now A only points that failed
-                    B = (B[minFilter*maxFilter == 0]) # now B only points that failed
-                    #print("shapes:", A.shape, B.shape)
+            ## we only regenerate points that failed to be within bounds
+            ## this means that every seed points gets a new point
+            A, B = temp, LOC
+            NT = np.zeros([0,self.TESTS.shape[1]])
+            repeat = True
+            while repeat:
+                minFilter = A < minlist
+                maxFilter = A > maxlist
+                for i in range(A.shape[0]):
+                    A[i,minFilter[i]] = \
+                      np.random.normal(loc=B[i,minFilter[i]], scale=SCALE[minFilter[i]])
+                    A[i,maxFilter[i]] = \
+                      np.random.normal(loc=B[i,maxFilter[i]], scale=SCALE[maxFilter[i]])
+                minFilter = np.prod( (A > minlist) , axis=1 )
+                maxFilter = np.prod( (A < maxlist) , axis=1 )
+                NT = np.concatenate( (NT, A[minFilter*maxFilter == 1]), axis = 0)
+                if NT.shape[0] >= LOC.shape[0]: repeat = False
+                A = (A[minFilter*maxFilter == 0])
+                B = (B[minFilter*maxFilter == 0])
 
             ## add viable test points to NROY (tested for imp below)
-            NROY = np.concatenate((NROY, TEMP1), axis=0)
-
-            #condition = NROY.shape[0] < toTest
-            #print("condition:", condition)
-
+            NROY = np.concatenate((NROY, NT), axis=0)
 
             ## hack part 1 - save the results of initial test points
             TEMP = [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax]
@@ -256,7 +223,6 @@ class Wave:
                 NROYmin = np.amin(self.NROY[:,i])
                 NROYmax = np.amax(self.NROY[:,i])
                 self.NROYminmax[i] = [NROYmin, NROYmax]
-            #print("  NROYminmax:", self.NROYminmax)
 
             ## hack part 2 - reset these variables back to normal
             [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax] = TEMP
@@ -362,10 +328,6 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             T = np.concatenate( (T, wave.NROY), axis=0)
             Imaxes = np.concatenate( (Imaxes, np.partition(wave.NROY_I, -maxno)[:,-maxno]), axis=0)
 
-        print(wave.TESTS.shape, wave.I.shape)
-        print(wave.NROY.shape, wave.NROY_I.shape)
-        print(T.shape, Imaxes.shape)
-
         ## space for all plots, and reference index to subplot indices
         print("  Creating HM plot objects...")
         rc = len(active)
@@ -391,15 +353,16 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             impPlot, odpPlot = ax[pltRef[s[1]],pltRef[s[0]]], ax[pltRef[s[0]],pltRef[s[1]]]
 
             impPlot.patch.set_facecolor(myGrey())
-            if NROY == False:
-                im_imp = impPlot.hexbin(
-                  #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
-                  T[:,s[0]], T[:,s[1]], C = Imaxes,
-                  gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
-                  extent=ex,
-                  reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
+            odpPlot.patch.set_facecolor(myGrey())
 
-                odpPlot.patch.set_facecolor(myGrey())
+            im_imp = impPlot.hexbin(
+              #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
+              T[:,s[0]], T[:,s[1]], C = Imaxes,
+              gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
+              extent=ex,
+              reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
+
+            if NROY == False:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]],
                   C = Imaxes<wave.cm,
@@ -408,15 +371,7 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
                   extent=ex,
                   linewidths=linewidths, mincnt=1)
             else:
-                # for NROY, combine tests and NROY to get a better picture
-                im_imp = impPlot.hexbin(
-                  T[:,s[0]], T[:,s[1]], C = Imaxes,
-                  gridsize=grid, cmap=impcolormap(), vmin=impCB[0], vmax=impCB[1],
-                  extent=ex,
-                  reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
-
                 # for NROY this is just a density plot of the NROY points
-                odpPlot.patch.set_facecolor(myGrey())
                 im_odp = odpPlot.hexbin(
                   wave.NROY[:,s[0]], wave.NROY[:,s[1]],
                   gridsize=grid, cmap = odpcolormap(), #  'inferno',
