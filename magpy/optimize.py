@@ -301,19 +301,12 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
 
         E.GP.makeA()
 
-        print("  nug: | ", E.GP.nugget, " |")
+        if E.GP.fixNugget == True: print("  nug: | ", E.GP.nugget, " |")
+        if E.GP.mucm == True: print("  sig: | ", E.GP.sigma, " |")
         print(hdr) # print headers
         print("   HP: | %s" % ' | '.join(map(str, [fmt(i) for i in bestHP])) + " |" )
         print(bhdr)
         print(" Beta: | %s" % ' | '.join(map(str, [fmt(i) for i in E.Basis.beta])) + " |" )
-
-        #for i,d in enumerate(E.GP.delta):
-        #    print("  Best Delta", E.Data.active[i], ":", d)
-        #print("  Best Nugget:", E.GP.nugget)
-        #if E.GP.mucm == True:
-        #    print("  MUCM Sigma:", E.GP.sigma)
-        #else:
-        #    print("  Best Sigma:", E.GP.sigma)
 
     else:
         print("  ERROR: No optimization was made.")
