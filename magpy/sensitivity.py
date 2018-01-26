@@ -29,7 +29,7 @@ def sense_table(E_list, sense_list, inputNames=[], outputNames=[], rowHeight=6):
 
     '''
 
-    print("== Sensitivity table ==")
+    print("= Sensitivity table =")
 
     # make sure the input is a list
     try:
@@ -188,24 +188,17 @@ class Sensitivity:
     def results(self):
         print("= UQSA results =")
         if self.done["unc"]:
-            print("   E*{E[f(X)]} :", self.uE)
-            print("   V*{E[f(X)]} :", self.uV)
-            print("   E*{V[f(X)]} :", self.uEV)
-        if self.done["sen"]:
-            for i, SI in enumerate(self.senseindex):
-                if self.done["unc"]:  print("  E(V" + str(i) +")/EV:", SI/self.uEV)
-                else:  print("  E(V" + str(i) +"):", SI)
-        if self.done["TEV"]:
-            for P in range(len(self.m)):
-                print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
-        if self.done["ME"]:
-            self.plot_main_effect()
-        if self.done["int"]:
-            print("  (Interaction effects not replotted here)")
+            print("  E*{E[f(X)]} :", fmt(self.uE))
+            print("  V*{E[f(X)]} :", fmt(self.uV))
+            print("  E*{V[f(X)]} :", fmt(self.uEV))
+        if self.done["sen"]: self.print_sensitivities()
+        if self.done["TEV"]: self.print_totaleffectvariance()
+        if self.done["ME"]:  self.plot_main_effect()
+        if self.done["int"]: print("  (Interaction effects not replotted here)")
 
     #@timeit
     def uncertainty(self):
-        print("== Uncertainty measures ==")
+        print("= Uncertainty measures =")
         self.done["unc"] = True
 
         self.w = [i for i in range(len(self.m))]
@@ -436,9 +429,9 @@ class Sensitivity:
 
         self.uEV = (self.I1-self.uV) + (self.I2 -self.uE**2)
         
-        print("   E*{E[f(X)]} :", fmt(self.uE))
-        print("   V*{E[f(X)]} :", fmt(self.uV))
-        print("   E*{V[f(X)]} :", fmt(self.uEV))
+        print("  E*{E[f(X)]} :", fmt(self.uE))
+        print("  V*{E[f(X)]} :", fmt(self.uV))
+        print("  E*{V[f(X)]} :", fmt(self.uEV))
 
 
     #### utility functions to simplify code ####
@@ -475,7 +468,7 @@ class Sensitivity:
 
     def main_effect(self, plot=False, points=100, customKey=[], customLabels=[], plotShrink=0.9, w=[], black_white=False, calledByInteraction=False):
         if not calledByInteraction:
-            print("== Main effects ==")
+            print("= Main effects =")
             print("  Calculating main effects...")
             self.done["ME"] = True
         self.effect = np.zeros([self.m.size , points])
@@ -549,7 +542,7 @@ class Sensitivity:
         plt.show()
 
     def interaction_effect(self, i, j, points = 25, customLabels=[]):
-        print("== Interaction effects ==")
+        print("= Interaction effects =")
         print("  Indices:", [i, j])
         self.done["int"] = True
         self.interaction = np.zeros([points , points])
@@ -618,7 +611,7 @@ class Sensitivity:
     ##### isn't clear that this is correct results, since no MUCM examples...
     def totaleffectvariance(self):
         self.done["TEV"] = True
-        print("== Total effect variance ==")
+        print("= Total effect variance =")
         self.senseindexwb = np.zeros([self.m.size])
         self.EVTw = np.zeros([self.m.size])
 
@@ -626,7 +619,7 @@ class Sensitivity:
 
         #### to get MUCM ans, assume MUCM wrong, and this value is uEV
         self.EVf = self.uEV
-        print("  E*[ V[f(X)] ]:",self.EVf)
+        #print("  E*{V[f(X)]}:", fmt(self.EVf))
 
         self.initialise_matrices()
         
@@ -678,12 +671,24 @@ class Sensitivity:
             #print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
             ## this should be correct...
             self.EVTw[self.w] = self.EVf - self.EVaaa
-        for P in range(len(self.m)):
-            print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
+
+        #for P in range(len(self.m)):
+        #    print("  E(V[T" + str(P) + "]):" , self.EVTw[P])
+
+        self.print_totaleffectvariance()
+    
+    
+    def print_totaleffectvariance(self):
+        ## format printing
+        hdr = "      | "
+        for i,s in enumerate(self.EVTw):
+            hdr = hdr + " t" + str(self.active[i]).zfill(2) + " " + " | "
+        print(hdr)
+        print("  TI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.EVTw])), "|" )
 
 
     def sensitivity(self):
-        print("== Sensitivity indices ==")
+        print("= Sensitivity indices =")
         self.done["sen"] = True
         self.senseindex = np.zeros([self.m.size])
 
@@ -732,17 +737,20 @@ class Sensitivity:
 
         #if self.done["unc"]:
         #    print("  SUM:" , np.sum(self.senseindex/self.uEV))
+        self.print_sensitivities()
 
+
+    def print_sensitivities(self):
         ## format printing
-        hdr = "       | "
+        hdr = "      | "
         for i,s in enumerate(self.senseindex):
             hdr = hdr + " s" + str(self.active[i]).zfill(2) + " " + " | "
 
         print(hdr)
         if self.done["unc"]:
-            print("   SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex/self.uEV])), "| SUM:" , fmt(np.sum(self.senseindex/self.uEV)) )
+            print("  SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex/self.uEV])), "| SUM:" , fmt(np.sum(self.senseindex/self.uEV)) )
         else:
-            print("   SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex])), "|")
+            print("  SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex])), "|")
 
 
     def UPSQRT_const(self):
