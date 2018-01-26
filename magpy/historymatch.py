@@ -277,13 +277,17 @@ def odpcolormap():
 
 
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False):
+def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False, NIMP=True):
 
     print("= Creating History Matching plots =")
 
     ## option to plot NROY against ODP
     if NROY == True and wave.NROY == []:
         print("█ WARNING: cannot using NROY = True because NROY not calculated")
+        exit()
+    if NIMP == False and NROY == False:
+        print("█ WARNING: cannot have NIMP = False and NROY = False because nothing to plot")
+        exit()
     if globalColorbar == True and odpMax == None:
         print("█ WARNING: odpMax must be set to use globalColorBar")
     if globalColorbar == True and NROY == True:
@@ -324,11 +328,15 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
         ## determine the max'th Implausibility
         print("  Determining", maxno, "max'th implausibility...")
-        T = wave.TESTS
-        Imaxes = np.partition(wave.I, -maxno)[:,-maxno]
-        if NROY == True:
-            T = np.concatenate( (T, wave.NROY), axis=0)
-            Imaxes = np.concatenate( (Imaxes, np.partition(wave.NROY_I, -maxno)[:,-maxno]), axis=0)
+        if NIMP == True:
+            T = wave.TESTS
+            Imaxes = np.partition(wave.I, -maxno)[:,-maxno]
+            if NROY == True:
+                T = np.concatenate( (T, wave.NROY), axis=0)
+                Imaxes = np.concatenate((Imaxes, np.partition(wave.NROY_I, -maxno)[:,-maxno]),axis=0)
+        else:
+            T = wave.NROY
+            Imaxes = np.partition(wave.NROY_I, -maxno)[:,-maxno]
 
         ## space for all plots, and reference index to subplot indices
         print("  Creating HM plot objects...")
