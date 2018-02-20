@@ -134,7 +134,10 @@ def sense_table(E_list, sense_list, inputNames=[], outputNames=[], rowHeight=6):
 
 ## format
 def fmt(x):
-    return str(x)[:5] % x
+    if x >= 0.001:
+        return str(x)[:5] % x
+    else:
+        return "0.000"
 
 
 class Sensitivity:
@@ -752,7 +755,8 @@ class Sensitivity:
         if self.done["unc"]:
             print("  SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex/self.uEV])), "| SUM:" , fmt(np.sum(self.senseindex/self.uEV)) )
         else:
-            print("  SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex])), "|")
+            print("  Calculate uncertainty() in order to print normalized sensitivity indices")
+        #    print("  SI: | %s" % ' | '.join(map(str, [fmt(i) for i in self.senseindex])), "|")
 
 
     def UPSQRT_const(self):
