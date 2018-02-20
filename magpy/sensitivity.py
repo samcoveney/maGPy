@@ -261,7 +261,9 @@ class Sensitivity:
             np.linalg.det(self.B)/np.linalg.det(2.0*self.C+self.B))*\
             np.exp(-0.5*Qk)
         Ehx = np.c_[np.ones(self.x.shape[0]), mpk]
-        self.Rht = np.einsum("ij,ij->ji", self.Rt[:,None], Ehx)
+        ## this code needed changing after change in NumPy
+        #self.Rht = np.einsum("ij,ij->ji", self.Rt[:,None], Ehx)
+        self.Rht = np.einsum("i,ij->ji", self.Rt, Ehx)
 
         self.Rtt = np.zeros([self.x.shape[0], self.x.shape[0]])
         x_k_pl_l = (self.x[:,None] + self.x[:])
