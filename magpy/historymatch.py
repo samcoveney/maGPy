@@ -281,6 +281,12 @@ def odpcolormap():
     cmap.set_under(color=myGrey())
     return cmap
 
+def colormap(cmap, b, t):
+    n = 100
+    cb   = np.linspace(b, t, n)
+    new_cmap = colors.LinearSegmentedColormap.from_list('trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=b, b=t), cmap( cb ) )
+    return new_cmap
+
 
 ## implausibility and optical depth plots for all pairs of active indices
 def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False, NIMP=True, manualRange={}):
@@ -379,7 +385,8 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             im_imp = impPlot.hexbin(
               #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=impcolormap(wave.cm), vmin=impCB[0], vmax=impCB[1],
+              #gridsize=grid, cmap=impcolormap(wave.cm), vmin=impCB[0], vmax=impCB[1],
+              gridsize=grid, cmap=colormap(plt.get_cmap('jet'),0.5,0.95), vmin=1.0, vmax=3.0,
               extent=ex,
               reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
 
