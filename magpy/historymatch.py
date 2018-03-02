@@ -283,7 +283,7 @@ def odpcolormap():
 
 
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False, NIMP=True):
+def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False, NIMP=True, manualRange={}):
 
     print("= Creating History Matching plots =")
 
@@ -362,9 +362,14 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
         minCB, maxCB = 1.0, 0.0  ## set backwards here as initial values to be beaten
         printProgBar(0, len(gSets), prefix = '  Progress:', suffix = '')
         for i, s in enumerate(gSets):
-            ## minmax is always [0,1] now, so don't need this
-            #ex = ( minmax[s[0]][0], minmax[s[0]][1], minmax[s[1]][0], minmax[s[1]][1])
-            ex = ( 0,1,0,1 )
+            ex = ( 0,1,0,1 ) # extent for hexplot binning
+            # manualRange for axis range of hexplot
+            if manualRange == {}:
+                exPlt = ( 0,1,0,1 )
+            else:
+                smR = wave.scale(manualRange, prnt=False)  # scales truex into new units so I can plot in my tests                
+                exPlt = ( smR[s[0]][0], smR[s[0]][1], smR[s[1]][0], smR[s[1]][1] )
+                print("  axis extents x:", '{:0.3f}'.format(exPlt[0]), "->", '{:0.3f}'.format(exPlt[1]), "y:", '{:0.3f}'.format(exPlt[2]), "->", '{:0.3f}'.format(exPlt[3]))
 
             impPlot, odpPlot = ax[pltRef[s[1]],pltRef[s[0]]], ax[pltRef[s[0]],pltRef[s[1]]]
 
@@ -410,7 +415,10 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             xLabels, yLabels = ['']*len(xlabels), ['']*len(ylabels)
             impPlot.set_xticklabels(xLabels); impPlot.set_yticklabels(yLabels)
             odpPlot.set_xticklabels(xLabels); odpPlot.set_yticklabels(yLabels)
-            #impPlot.set_xlabel("sam") 
+
+            #force equal axis
+            impPlot.set_xlim(exPlt[0], exPlt[1]); impPlot.set_ylim(exPlt[2], exPlt[3])
+            odpPlot.set_xlim(exPlt[0], exPlt[1]); odpPlot.set_ylim(exPlt[2], exPlt[3])
 
             printProgBar(i+1, len(gSets), prefix = '  Progress:', suffix = '')
 
@@ -434,7 +442,9 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
 
         for a in ax.flat:
             a.set(adjustable='box-forced', aspect='equal')
-            #a.set_xticks([]); a.set_yticks([]); a.set_aspect('equal')
+            x0,x1 = a.get_xlim()
+            y0,y1 = a.get_ylim()
+            a.set_aspect((x1-x0)/(y1-y0))
 
         #plt.tight_layout()
 
