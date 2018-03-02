@@ -227,35 +227,41 @@ class Wave:
             ## hack part 2 - reset these variables back to normal
             [self.TESTS, self.pm, self.pv, self.I, self.NIMP, self.NIMPminmax] = TEMP
 
-    ## return supplied points in original units
-    def unscale(self, points):
-        print("= Unscaling points into original units =")
-        if points.shape[1] != self.TESTS.shape[1]:
-            print("ERROR: features of suppled points and TEST inputs don't match")
-            return
-        minmax = self.emuls[0].Data.minmax
+    ## help function for scaling/unscaling
+    def _helper_scale(self, points, mode, prnt):
 
-        ## unscale the points (probably supplied either NIMP subset or NROY subset)
-        unscaledPoints = np.empty(points.shape)
-        for i in range(points.shape[1]):
-            unscaledPoints[:,i] = minmax[i][0] + points[:,i] * (minmax[i][1] - minmax[i][0])
-                              
-        return unscaledPoints
+        minmax = self.emuls[0].Data.minmax # use minmax of first emulator for scaling
+
+        if isinstance(points, dict): # IF DICTIONARY IS SUPPLIED
+            tempPoints, LEN, DIC = {}, len(points), True
+        else: # IF ARRAY IS SUPPLIED
+            tempPoints, LEN, DIC = np.empty(points.shape), points.shape[1], False
+
+        # test enough points are given
+        if LEN != self.TESTS.shape[1]:
+            print("ERROR: features of suppled points and TEST inputs don't match"); exit()
+            
+        if mode == 'scale':
+            if prnt: print("= Scaling points into scaled units =")
+            for i in range(LEN):
+                if DIC: tempPoints[i]   = [ (points[i][0] - minmax[i][0]) / (minmax[i][1] - minmax[i][0]) , (points[i][1] - minmax[i][0]) / (minmax[i][1] - minmax[i][0]) ]
+                else:   tempPoints[:,i] =   (points[:,i]  - minmax[i][0]) / (minmax[i][1] - minmax[i][0]) 
+
+        if mode == 'unscale':
+            if prnt: print("= Unscaling points into original units =")
+            for i in range(LEN):
+                if DIC: tempPoints[i]   = [ minmax[i][0] + points[i][0] * (minmax[i][1] - minmax[i][0]) , minmax[i][0] + points[i][1] * (minmax[i][1] - minmax[i][0]) ]
+                else:   tempPoints[:,i] =   minmax[i][0] + points[:,i]  * (minmax[i][1] - minmax[i][0])
+        
+        return tempPoints
+
+    ## return supplied points in original units
+    def unscale(self, points, prnt=True):
+        return self._helper_scale(points, mode='unscale', prnt=prnt) 
 
     ## return supplied points in scaled units
-    def scale(self, points):
-        print("= Unscaling points into original units =")
-        if points.shape[1] != self.TESTS.shape[1]:
-            print("ERROR: features of suppled points and TEST inputs don't match")
-            return
-        minmax = self.emuls[0].Data.minmax
-
-        ## unscale the points (probably supplied either NIMP subset or NROY subset)
-        scaledPoints = np.empty(points.shape)
-        for i in range(points.shape[1]):
-            scaledPoints[:,i] = (points[:,i] - minmax[i][0]) / (minmax[i][1] - minmax[i][0])
-                              
-        return scaledPoints
+    def scale(self, points, prnt=True):
+        return self._helper_scale(points, mode='scale', prnt=prnt) 
 
 ## colormaps
 def myGrey():
