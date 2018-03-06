@@ -102,6 +102,25 @@ class Wave:
             print("█ WARNING: NROY should be reset with findNROY(..., restart=True)")
         return
 
+    ## search through the test inputs to find non-implausible points
+    def simImp(self, data = None):
+        print("  Calculating Implausibilities of simulation points")
+        if data == None: print("  (Using simulation data from these emulators)")
+        else:            print("  (Using provided simulation data = [inputs, outputs])")
+
+        if data == None: Isim = np.zeros([self.emuls[0].Data.xT.shape[0], len(self.emuls)])
+        else:            Isim = np.zeros([data[0].shape[0], len(self.emuls)])
+
+        ## loop over outputs (i.e. over emulators)
+        for o in range(len(self.emuls)):
+            E, z, v = self.emuls[o], self.zs[o], self.var[o]
+
+            if data == None: pmean = E.Data.yT
+            else:            pmean = data[1][:,o]
+            Isim[:,o] = np.sqrt( ( pmean - z )**2 / ( v ) )
+ 
+        return Isim
+
     ## find all the non-implausible points in the test points
     def findNIMP(self, maxno=1):
 
@@ -265,76 +284,57 @@ class Wave:
 
 ## colormaps
 def myGrey():
-    return '#696988'
-
-def impcolormap(cm):
-    #return colors.LinearSegmentedColormap.from_list('imp',
-    #  [(0, '#90ff3c'), (0.50, '#ffff3c'), (0.95, '#e2721b'), (1, '#db0100')], N=256)
-    return colors.LinearSegmentedColormap.from_list('imp',
-      [(0, '#90ff3c'), (1.0/cm, '#90ff3c'), (2.0/cm, '#ffff3c'), (cm/cm, '#db0100')], N=256)
-
-def odpcolormap():
-    #[(0, myGrey()), (0.00000001, '#ffffff'),  # alternative first colours
-    cmap = colors.LinearSegmentedColormap.from_list('odp',
-      [(0.0, '#ffffff'),
-       (0.20, '#93ffff'), (0.45, '#5190fc'), (0.65, '#0000fa'), (1, '#db00fa')], N=256)
-    cmap.set_under(color=myGrey())
-    return cmap
+    #return '#696988'
+    return 'lightgrey'
 
 def colormap(cmap, b, t):
-    n = 100
+    n = 500
     cb   = np.linspace(b, t, n)
-    new_cmap = colors.LinearSegmentedColormap.from_list('trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=b, b=t), cmap( cb ) )
+    cm = cmap( cb )
+    #cm[0:50,3] = np.linspace(0.80,1.0,50) # adjust alphas (transparencies)
+    new_cmap = colors.LinearSegmentedColormap.from_list('trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=b, b=t), cm )
     return new_cmap
 
-
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, filename="hexbin.pkl", points=[], replot=False, colorbar=True, globalColorbar=False, activeId = [], NROY=False, NIMP=True, manualRange={}):
+def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False, replot=False, colorbar=True, activeId = [], NROY=False, NIMP=True, manualRange={}):
 
     print("= Creating History Matching plots =")
 
     ## option to plot NROY against ODP
     if NROY == True and wave.NROY == []:
-        print("█ WARNING: cannot using NROY = True because NROY not calculated")
-        exit()
+        print("█ WARNING: cannot using NROY = True because NROY not calculated"); exit()
     if NIMP == False and NROY == False:
-        print("█ WARNING: cannot have NIMP = False and NROY = False because nothing to plot")
-        exit()
-    if globalColorbar == True and odpMax == None:
-        print("█ WARNING: odpMax must be set to use globalColorBar")
-    if globalColorbar == True and NROY == True:
-        print("█ WARNING: cannot use NROY with globalColorBar")
+        print("█ WARNING: cannot have NIMP = False and NROY = False because nothing to plot"); exit()
 
+    ## useful messages
+    print("  Considering points NIMP:", NIMP, "& NROY:", NROY)
+ 
     ## make list of all the active indices across all emulators
     active = []
     for e in wave.emuls:
         for a in e.Data.active:
             if a not in active: active.append(a)
     active.sort()
-    print("  ACTIVE:", active)
+    print("  Active features:", active)
 
     ## restrict to smaller set of active indices
     if activeId != []:
         for a in activeId:
             if a not in active:
-                print("ERROR: activeId", a, "not an active emulator index")
-                return
-        active = activeId
-        active.sort()
+                print("ERROR: activeId", a, "not an active emulator index"); exit()
+        active = activeId; active.sort()
 
     ## reference global index into subplot index
     pltRef = {}
     for count, key in enumerate(active): pltRef[key] = count
-    print("  PLTREF:", pltRef)
-
-    minmax = wave.emuls[0].Data.minmax
+    print("  {Features: Subplots} : ", pltRef)
 
     ## create list of all pairs of active inputs
     gSets = []
     for i in active:
         for j in active:
             if i!=j and i<j and [i,j] not in gSets:  gSets.append([i,j])
-    print("  GLOBAL SETS:", gSets)
+    #print("  GLOBAL SETS:", gSets)
 
     if replot == False:
 
@@ -350,22 +350,22 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             T = wave.NROY
             Imaxes = np.partition(wave.NROY_I, -maxno)[:,-maxno]
 
+        ## plots simulation points colored by imp (no posterior variance since these are sim points)
+        print("  Plotting simulations points coloured by implausibility...")
+        if sims:
+            Isim = wave.simImp()
+            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
+            simPoints = wave.emuls[0].Data.xT
+            Temp = np.hstack([IsimMaxes[:,None], simPoints])
+            Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
+            IsimMaxes, simPoints = Temp[:,0], Temp[:,1:]
+
         ## space for all plots, and reference index to subplot indices
         print("  Creating HM plot objects...")
         rc = len(active)
         fig, ax = plt.subplots(nrows = rc, ncols = rc)
 
-        ## set colorbar bounds
-        impCB = [0, wave.cm] if impMax == None else [0.0, impMax]
-        if odpMax == None and globalColorbar == True:
-            print("█ WARNING: cannot use globalColorbar without specifying odpMax for ODP colorbar")
-            globalColorbar = False
-        odpCB = [0.00000001, None] if odpMax == None else [0.00000001, odpMax]
-        #odpCB = [None, None] if odpCB == [] else odpCB
-
         print("  Making subplots of paired indices...")
-        ## loop over plot_bins()
-        minCB, maxCB = 1.0, 0.0  ## set backwards here as initial values to be beaten
         printProgBar(0, len(gSets), prefix = '  Progress:', suffix = '')
         for i, s in enumerate(gSets):
             ex = ( 0,1,0,1 ) # extent for hexplot binning
@@ -373,102 +373,76 @@ def plotImp(wave, maxno=1, grid=10, impMax=None, odpMax=None, linewidths=0.2, fi
             if manualRange == {}:
                 exPlt = ( 0,1,0,1 )
             else:
-                smR = wave.scale(manualRange, prnt=False)  # scales truex into new units so I can plot in my tests                
+                smR = wave.scale(manualRange, prnt=False)  # scales manualRange (unscaled) into scaled units for this wave
                 exPlt = ( smR[s[0]][0], smR[s[0]][1], smR[s[1]][0], smR[s[1]][1] )
-                print("  axis extents x:", '{:0.3f}'.format(exPlt[0]), "->", '{:0.3f}'.format(exPlt[1]), "y:", '{:0.3f}'.format(exPlt[2]), "->", '{:0.3f}'.format(exPlt[3]))
+                #print("  axis extents x:", '{:0.3f}'.format(exPlt[0]), "->", '{:0.3f}'.format(exPlt[1]), "y:", '{:0.3f}'.format(exPlt[2]), "->", '{:0.3f}'.format(exPlt[3]))
 
+            # reference correct subplot
             impPlot, odpPlot = ax[pltRef[s[1]],pltRef[s[0]]], ax[pltRef[s[0]],pltRef[s[1]]]
 
-            impPlot.patch.set_facecolor(myGrey())
-            odpPlot.patch.set_facecolor(myGrey())
+            # set background color of plot 
+            impPlot.patch.set_facecolor(myGrey()); odpPlot.patch.set_facecolor(myGrey())
 
+            # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
-              #wave.TESTS[:,s[0]], wave.TESTS[:,s[1]], C = Imaxes,
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              #gridsize=grid, cmap=impcolormap(wave.cm), vmin=impCB[0], vmax=impCB[1],
-              gridsize=grid, cmap=colormap(plt.get_cmap('jet'),0.5,0.95), vmin=1.0, vmax=3.0,
-              extent=ex,
-              reduce_C_function=np.min, linewidths=linewidths, mincnt=1)
+              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm,
+              extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
+            if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
-            if NROY == False:
-                im_odp = odpPlot.hexbin(
-                  T[:,s[0]], T[:,s[1]],
-                  C = Imaxes<wave.cm,
-                  #gridsize=grid, bins='log', cmap=odpcolormap(), vmin=odpCB[0], vmax=odpCB[1],
-                  gridsize=grid, cmap='viridis', #odpcolormap(), 
-                  vmin=odpCB[0], vmax=odpCB[1],
-                  extent=ex,
-                  linewidths=linewidths, mincnt=1)
+            # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
+            if sims == True:
+                odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=35, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm)#, edgecolor='black')
             else:
-                # for NROY this is just a density plot of the NROY points
                 im_odp = odpPlot.hexbin(
-                  wave.NROY[:,s[0]], wave.NROY[:,s[1]],
-                  gridsize=grid, cmap='viridis', # odpcolormap(),
-                  extent=ex,
-                  linewidths=linewidths, mincnt=1)
+                  T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
+                  gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.35), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
+                  extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1)
+                if colorbar: plt.colorbar(im_odp, ax=odpPlot)
 
-            ## save min and max of ODP, useful user info for making global plot
-            CBmin, CBmax = np.min(im_odp.get_array()) , np.max(im_odp.get_array())
-            if CBmin < minCB:  minCB = CBmin
-            if CBmax > maxCB:  maxCB = CBmax
-
-            if globalColorbar == False and colorbar == True:
-                plt.colorbar(im_imp, ax=impPlot)
-                plt.colorbar(im_odp, ax=odpPlot)
-
-            #impPlot.set_xlabel(minmax[s[0]])
-            xlabels = [item.get_text() for item in impPlot.get_xticklabels()]
-            ylabels = [item.get_text() for item in impPlot.get_yticklabels()]
-            xLabels, yLabels = ['']*len(xlabels), ['']*len(ylabels)
-            impPlot.set_xticklabels(xLabels); impPlot.set_yticklabels(yLabels)
-            odpPlot.set_xticklabels(xLabels); odpPlot.set_yticklabels(yLabels)
-
-            #force equal axis
+            # force equal axes
             impPlot.set_xlim(exPlt[0], exPlt[1]); impPlot.set_ylim(exPlt[2], exPlt[3])
             odpPlot.set_xlim(exPlt[0], exPlt[1]); odpPlot.set_ylim(exPlt[2], exPlt[3])
 
             printProgBar(i+1, len(gSets), prefix = '  Progress:', suffix = '')
 
-        print("  ODP range:", minCB, ":", maxCB)
+        # delete 'empty' central plot
+        for a in range(rc): fig.delaxes(ax[a,a])
 
-        ## global colorbars
-        if globalColorbar == True and odpMax != None and NROY == False:
-            plt.draw()
-            p0 = ax[0,0].get_position().get_points().flatten()
-            p1 = ax[rc-1,rc-1].get_position().get_points().flatten()
-            # imp
-            ax_cbar = fig.add_axes([0.035, p0[0], 0.01, p1[2]-p0[0]])
-            plt.colorbar(im_imp, cax=ax_cbar)
-            # odp
-            ax_cbar = fig.add_axes([p1[2] + 0.045, p0[0], 0.01, p1[2]-p0[0]])
-            plt.colorbar(im_odp, cax=ax_cbar)
-
-        ## some plot options
-        for a in range(rc):
-            fig.delaxes(ax[a,a])
-
+        # force range of plot to be correct
         for a in ax.flat:
             a.set(adjustable='box-forced', aspect='equal')
-            x0,x1 = a.get_xlim()
-            y0,y1 = a.get_ylim()
+            x0,x1 = a.get_xlim(); y0,y1 = a.get_ylim()
             a.set_aspect((x1-x0)/(y1-y0))
+            a.set_xticks([]); a.set_yticks([]); 
 
         #plt.tight_layout()
 
+        print("  Pickling plot in", filename)
+        pickle.dump([fig, ax], open(filename, 'wb'))  # save plot - for Python 3 - py2 may need `file` instead of `open`
     else:
         print("  Unpickling plot in", filename, "...")
         fig, ax = pickle.load(open(filename,'rb'))  # load plot
 
-    pickle.dump([fig, ax], open(filename, 'wb'))  # save plot
-    # This is for Python 3 - py2 may need `file` instead of `open`
-
-    ## plots points
+    ## plots points passed to this function
+    if isinstance(points, list) == False:
+        print("█ WARNING: 'points' must be a list of either [inputs] or [inputs, outputs], where inputs/outputs are numpy arrays"); return
     if points is not []:
-        print("  Plotting points as well...")
-        for p in points:
+        if len(points) == 1:
+            print("  Plotting 'points'...")
             for s in gSets:
-                ax[pltRef[s[1]],pltRef[s[0]]].scatter(p[s[0]], p[s[1]], s=15, c='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(p[s[0]], p[s[1]], s=15, c='black')
+                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=35, c='black')
+        if len(points) == 2:
+            print("  Plotting 'points' coloured by implausibility (assuming these points are simulation points...)")
+            Isim = wave.simImp(data = points)
+            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
+            Temp = np.hstack([IsimMaxes[:,None], points[0]])
+            Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
+            IsimMaxes, points[0] = Temp[:,0], Temp[:,1:]
+            for s in gSets:
+                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
 
     plt.show()
     return
