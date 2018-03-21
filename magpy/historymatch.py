@@ -22,6 +22,9 @@ class Wave:
         ## passed in
         self.emuls = emuls
         self.zs, self.var, self.cm = zs, var, cm
+        if self.cm < 2.0:
+            print("ERROR: cutoff cannot be less than 2.0 (should start/stay at 3.0)")
+            exit()
         self.I, self.pm, self.pv = [], [], []
         self.doneImp = False
         if tests is not []:
