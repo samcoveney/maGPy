@@ -108,21 +108,22 @@ class Wave:
     ## search through the test inputs to find non-implausible points
     def simImp(self, data = None):
         print("  Calculating Implausibilities of simulation points")
-        if data == None: print("  (Using simulation data from these emulators)")
-        else:            print("  (Using provided simulation data = [inputs, outputs])")
+        if data is None:
+            print("  (Using simulation data from these emulators)")
+            X = self.scale(self.emuls[0].Data.xAll, prnt=False)
+        else:
+            print("  (Using provided simulation data = [inputs, outputs])")
+            X = data[0]
 
-        if data == None: Isim = np.zeros([self.emuls[0].Data.xT.shape[0], len(self.emuls)])
-        else:            Isim = np.zeros([data[0].shape[0], len(self.emuls)])
+        Isim = np.zeros([X.shape[0], len(self.emuls)])
 
         ## loop over outputs (i.e. over emulators)
         for o in range(len(self.emuls)):
             E, z, v = self.emuls[o], self.zs[o], self.var[o]
-
-            if data == None: pmean = E.Data.yT
-            else:            pmean = data[1][:,o]
+            pmean = E.Data.yT if data is None else data[1][:,o]
             Isim[:,o] = np.sqrt( ( pmean - z )**2 / ( v ) )
  
-        return Isim
+        return X, Isim
 
     ## find all the non-implausible points in the test points
     def findNIMP(self, maxno=1):
@@ -290,12 +291,14 @@ def myGrey():
     #return '#696988'
     return 'lightgrey'
 
-def colormap(cmap, b, t):
+def colormap(cmap, b, t, mode="imp"):
     n = 500
     cb   = np.linspace(b, t, n)
     cm = cmap( cb )
     #cm[0:50,3] = np.linspace(0.80,1.0,50) # adjust alphas (transparencies)
     new_cmap = colors.LinearSegmentedColormap.from_list('trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=b, b=t), cm )
+    #new_cmap.set_under(color=myGrey())    
+    if mode == "imp": new_cmap.set_over(color="#ff0000")    
     return new_cmap
 
 ## implausibility and optical depth plots for all pairs of active indices
@@ -356,9 +359,8 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
         ## plots simulation points colored by imp (no posterior variance since these are sim points)
         print("  Plotting simulations points coloured by implausibility...")
         if sims:
-            Isim = wave.simImp()
+            simPoints, Isim = wave.simImp()
             IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
-            simPoints = wave.emuls[0].Data.xT
             Temp = np.hstack([IsimMaxes[:,None], simPoints])
             Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
             IsimMaxes, simPoints = Temp[:,0], Temp[:,1:]
@@ -389,19 +391,19 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm,
+              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=1.0, vmax=wave.cm,
               extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
             if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
             # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
             if sims == True:
-                odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=35, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm)#, edgecolor='black')
+                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=1.0, vmax=wave.cm)#, edgecolor='black')
             else:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
-                  gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.35), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
+                  gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.35, mode="odp"), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
                   extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1)
-                if colorbar: plt.colorbar(im_odp, ax=odpPlot)
+            if colorbar: plt.colorbar(im_odp, ax=odpPlot)
 
             # force equal axes
             impPlot.set_xlim(exPlt[0], exPlt[1]); impPlot.set_ylim(exPlt[2], exPlt[3])
@@ -432,20 +434,21 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
         print("█ WARNING: 'points' must be a list of either [inputs] or [inputs, outputs], where inputs/outputs are numpy arrays"); return
     if points is not []:
         if len(points) == 1:
+            pointsX = points[0]
             print("  Plotting 'points'...")
             for s in gSets:
-                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=35, c='black')
+                ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c='black')
         if len(points) == 2:
             print("  Plotting 'points' coloured by implausibility (assuming these points are simulation points...)")
-            Isim = wave.simImp(data = points)
+            pointsX, Isim = wave.simImp(data = points)
             IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
-            Temp = np.hstack([IsimMaxes[:,None], points[0]])
+            Temp = np.hstack([IsimMaxes[:,None], pointsX])
             Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
-            IsimMaxes, points[0] = Temp[:,0], Temp[:,1:]
+            IsimMaxes, pointsX = Temp[:,0], Temp[:,1:]
             for s in gSets:
-                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(points[0][:,s[0]], points[0][:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
+                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
 
     plt.show()
     return
