@@ -5,8 +5,8 @@ from scipy.optimize import minimize, check_grad
 
 from magpy._utils import *
 
-np.set_printoptions(precision=3)
-np.set_printoptions(suppress=True)
+#np.set_printoptions(precision=3)
+#np.set_printoptions(suppress=True)
 
 ## progress bar
 def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, length = 20, fill = '█'):

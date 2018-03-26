@@ -6,7 +6,6 @@
 ## history matching
 
 ## sensitivity
-* fix sensitivity printing in results() function
 
 ## examples
 * Need a History Matching example

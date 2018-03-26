@@ -517,7 +517,7 @@ class Sensitivity:
             colors = cmap(np.linspace(0, 1.0, len(w)))
                 
         for cn, P in enumerate(w):  # cn: color number
-            print("  Input", P, "range", self.minmax[P])
+            #print("  Input", P, "range", self.minmax[P])
 
             if customKey == []:
                 ax.plot( np.linspace(0.0,1.0,points), self.effect[P] ,\

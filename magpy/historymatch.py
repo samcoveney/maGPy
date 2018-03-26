@@ -20,6 +20,7 @@ class Wave:
     """Stores data for wave of HM search."""
     def __init__(self, emuls, zs, cm, var, tests=[]):
         ## passed in
+        print("█ NOTE: Data points should be in same order (not shuffled) for all emulators")
         self.emuls = emuls
         self.zs, self.var, self.cm = zs, var, cm
         if self.cm < 2.0:
@@ -391,17 +392,17 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=1.0, vmax=wave.cm,
+              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=0.0, vmax=wave.cm,
               extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
             if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
             # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
             if sims == True:
-                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=1.0, vmax=wave.cm)#, edgecolor='black')
+                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=0.0, vmax=wave.cm)#, edgecolor='black')
             else:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
-                  gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.35, mode="odp"), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
+                  gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.25, mode="odp"), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
                   extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1)
             if colorbar: plt.colorbar(im_odp, ax=odpPlot)
 
