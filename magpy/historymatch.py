@@ -18,11 +18,12 @@ def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, leng
 
 class Wave:
     """Stores data for wave of HM search."""
-    def __init__(self, emuls, zs, cm, var, tests=[]):
+    def __init__(self, emuls, zs, cm, var, covar=None, tests=[]):
         ## passed in
         print("█ NOTE: Data points should be in same order (not shuffled) for all emulators")
         self.emuls = emuls
         self.zs, self.var, self.cm = zs, var, cm
+        self.covar = covar
         if self.cm < 2.0:
             print("ERROR: cutoff cannot be less than 2.0 (should start/stay at 3.0)")
             exit()
@@ -41,7 +42,7 @@ class Wave:
     ## pickle a list of relevant data
     def save(self, filename):
         print("= Pickling wave data in", filename, "=")
-        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I ]
+        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI ]
         with open(filename, 'wb') as output:
             pickle.dump(w, output, pickle.HIGHEST_PROTOCOL)
         return
@@ -51,16 +52,17 @@ class Wave:
         print("= Unpickling wave data in", filename, "=")
         with open(filename, 'rb') as input:
             w = pickle.load(input)
-        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I = [i for i in w]
+        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI = [i for i in w]
         return
 
     ## set the test data
     def setTests(self, tests):
         if isinstance(tests, np.ndarray):
             self.TESTS = tests.astype(np.float16)
-            self.I = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
-            self.pm = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
-            self.pv = np.empty((self.TESTS.shape[0],len(self.emuls)),dtype=np.float16)
+            self.I  = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
+            self.mI = None # NOTE: set later in code then appended to self.I as extra column
+            self.pm = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
+            self.pv = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
         else:
             print("ERROR: tests must be a numpy array")
         return
@@ -91,19 +93,19 @@ class Wave:
                 self.I[L:U,o] = np.sqrt( ( pmean - z )**2 / ( pvar + v ) )
                 printProgBar((o*chunkNum+c+1), len(self.emuls)*chunkNum,
                               prefix = '  Progress:', suffix = '')
- 
-        self.doneImp = True
-        return
 
-    ## recalculate imp using stored pmean and pvar values (presumably user changed z & v
-    def recalcImp(self):
-        print("\n= Recalculating Implausibilities using stored posterior means and variances =")
-        print("█ WARNING: this will be less accurate since posterior only stored as float16")
-        for o in range(len(self.emuls)):
-            z, v = self.zs[o], self.var[o]
-            self.I[:,o] = np.sqrt( ( self.pm[:,o] - z )**2 / ( self.pv[:,o] + v ) )
-        if len(self.NROY) > 0:
-            print("█ WARNING: NROY should be reset with findNROY(..., restart=True)")
+        ## calculate multivariate implausibility
+        if self.covar is not None:
+            print("= Calculating multivariate implausibility of", P, "points =")
+            self.mI = np.zeros(P)
+            for p in range(P):
+                diff = self.zs - self.pm[p]
+                var  = self.covar + np.diag(self.pv[p])
+                self.mI[p] = np.sqrt( (diff.T).dot(np.linalg.solve(var,diff)) )
+                # NOTE: multivariate form needs sqrt I think, perhaps typo in Ian's paper?
+        # NOTE: appending mI to I for now, as this leaves most of the code the same
+            self.I = np.hstack([self.I, self.mI[:,None]])
+        self.doneImp = True
         return
 
     ## search through the test inputs to find non-implausible points
@@ -123,8 +125,31 @@ class Wave:
             E, z, v = self.emuls[o], self.zs[o], self.var[o]
             pmean = E.Data.yT if data is None else data[1][:,o]
             Isim[:,o] = np.sqrt( ( pmean - z )**2 / ( v ) )
+        
+        ## calculate multivariate implausibility
+        if self.covar is not None:
+            print("= Calculating multivariate implausibility of simulation points =")
+            P = X.shape[0]
+            mIsim = np.zeros(P)
+            for p in range(P):
+                if data is None:
+                    diff = self.zs - np.array([E.Data.yT[p] for E in self.emuls])
+                else:
+                    diff = self.zs - data[1][p]
+                var  = self.covar
+                mIsim[p] = np.sqrt( (diff.T).dot(np.linalg.solve(var,diff)) )
+            Isim = np.hstack([Isim, mIsim[:,None]])
  
         return X, Isim
+
+    def findNIMPsim(self, maxno=1):
+        print("  Returning non-implausible simulation points")
+        X, Isim = self.simImp()
+        Y = self.emuls[0].Data.yAll
+        Imaxes = np.partition(Isim, -maxno)[:,-maxno]
+        NIMP = np.argwhere(Imaxes < self.cm)[:,0]
+        xx, yy = X[NIMP], Y[NIMP]
+        return self.unscale(xx, prnt=False), yy
 
     ## find all the non-implausible points in the test points
     def findNIMP(self, maxno=1):
