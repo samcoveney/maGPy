@@ -193,6 +193,7 @@ class Wave:
         if len(self.NROY) == 0:
             # initially, add NIMP to NROY
             self.NROY = self.TESTS[self.NIMP]
+            self.NROY_I = self.I[self.NIMP]
             self.NROYminmax = self.NIMPminmax
             print("= Creating", howMany, "NROY cloud from", self.NIMP.size , "NIMP points =")
         else:
@@ -328,7 +329,7 @@ def colormap(cmap, b, t, mode="imp"):
     return new_cmap
 
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False, replot=False, colorbar=True, activeId = [], NROY=False, NIMP=True, manualRange={}):
+def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False, replot=False, colorbar=True, activeId = [], NROY=False, NIMP=True, manualRange={}, vmin=0.0):
 
     print("= Creating History Matching plots =")
 
@@ -417,13 +418,13 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=0.0, vmax=wave.cm,
+              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm,
               extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
             if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
             # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
             if sims == True:
-                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=0.0, vmax=wave.cm)#, edgecolor='black')
+                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm)#, edgecolor='black')
             else:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
@@ -463,8 +464,8 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             pointsX = points[0]
             print("  Plotting 'points'...")
             for s in gSets:
-                ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c='black')
+                ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c='black')
         if len(points) == 2:
             print("  Plotting 'points' coloured by implausibility (assuming these points are simulation points...)")
             pointsX, Isim = wave.simImp(data = points)
@@ -473,8 +474,8 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
             IsimMaxes, pointsX = Temp[:,0], Temp[:,1:]
             for s in gSets:
-                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=15, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=1.0, vmax=wave.cm, edgecolor='black')
+                #ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=vmin, vmax=wave.cm, edgecolor='black')
+                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm)#, edgecolor='black')
 
     plt.show()
     return
