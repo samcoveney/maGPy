@@ -18,15 +18,19 @@ def printProgBar (iteration, total, prefix = '', suffix = '', decimals = 0, leng
 
 class Wave:
     """Stores data for wave of HM search."""
-    def __init__(self, emuls, zs, cm, var, covar=None, tests=[]):
+    def __init__(self, emuls, zs, cm, var, cmv=None, covar=None, tests=[]):
         ## passed in
         print("█ NOTE: Data points should be in same order (not shuffled) for all emulators")
         self.emuls = emuls
         self.zs, self.var, self.cm = zs, var, cm
         self.covar = covar
+        self.cmv = cmv
         if self.cm < 2.0:
-            print("ERROR: cutoff cannot be less than 2.0 (should start/stay at 3.0)")
-            exit()
+            print("ERROR: cutoff cannot be less than 2.0 (should start/stay at 3.0)"); exit()
+        if self.cmv is not None:
+            print("█ NOTE: multivariate imp cutoff (cmv) should be selected from appropiate percentile of chi-sq table with", len(zs), "degrees of freedom")
+        elif self.covar is not None:
+            print("ERROR: multivariate imp cutoff (cmv) must be provided if covar is provided"); exit()
         self.I, self.pm, self.pv = [], [], []
         self.doneImp = False
         if tests is not []:
@@ -59,10 +63,10 @@ class Wave:
     def setTests(self, tests):
         if isinstance(tests, np.ndarray):
             self.TESTS = tests.astype(np.float16)
-            self.I  = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
-            self.mI = None # NOTE: set later in code then appended to self.I as extra column
-            self.pm = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
-            self.pv = np.empty((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
+            self.I  = np.zeros((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
+            self.mI = np.zeros((self.TESTS.shape[0]) ) if self.covar is not None else None
+            self.pm = np.zeros((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
+            self.pv = np.zeros((self.TESTS.shape[0],len(self.emuls)) )#,dtype=np.float16)
         else:
             print("ERROR: tests must be a numpy array")
         return
@@ -97,14 +101,12 @@ class Wave:
         ## calculate multivariate implausibility
         if self.covar is not None:
             print("= Calculating multivariate implausibility of", P, "points =")
-            self.mI = np.zeros(P)
+            #self.mI = np.zeros(P)
             for p in range(P):
                 diff = self.zs - self.pm[p]
                 var  = self.covar + np.diag(self.pv[p])
                 self.mI[p] = np.sqrt( (diff.T).dot(np.linalg.solve(var,diff)) )
-                # NOTE: multivariate form needs sqrt I think, perhaps typo in Ian's paper?
-        # NOTE: appending mI to I for now, as this leaves most of the code the same
-            self.I = np.hstack([self.I, self.mI[:,None]])
+
         self.doneImp = True
         return
 
@@ -138,16 +140,18 @@ class Wave:
                     diff = self.zs - data[1][p]
                 var  = self.covar
                 mIsim[p] = np.sqrt( (diff.T).dot(np.linalg.solve(var,diff)) )
-            Isim = np.hstack([Isim, mIsim[:,None]])
  
-        return X, Isim
+        return X, Isim, mIsim
 
     def findNIMPsim(self, maxno=1):
         print("  Returning non-implausible simulation points")
-        X, Isim = self.simImp()
+        X, Isim, mIsim = self.simImp()
         Y = self.emuls[0].Data.yAll
         Imaxes = np.partition(Isim, -maxno)[:,-maxno]
-        NIMP = np.argwhere(Imaxes < self.cm)[:,0]
+        if self.covar is None:
+            NIMP = np.argwhere(Imaxes < self.cm)[:,0]
+        else:
+            NIMP = np.argwhere((Imaxes < self.cm) & (mIsim < self.cmv))[:,0]
         xx, yy = X[NIMP], Y[NIMP]
         return self.unscale(xx, prnt=False), yy
 
@@ -164,7 +168,11 @@ class Wave:
         Imaxes = np.partition(self.I, -maxno)[:,-maxno]
 
         ## check cut-off, store indices of points matching condition
-        self.NIMP = np.argwhere(Imaxes < self.cm)[:,0]
+        if self.covar is None:
+            self.NIMP = np.argwhere(Imaxes < self.cm)[:,0]
+        else:
+            self.NIMP = np.argwhere((Imaxes < self.cm) & (self.mI < self.cmv))[:,0]
+
         percent = ("{0:3.2f}").format(100*float(len(self.NIMP))/float(P))
         print("  NIMP fraction:", percent, "%  (", len(self.NIMP), "points )" )
 
@@ -263,6 +271,7 @@ class Wave:
             printProgBar(self.NROY.shape[0], howMany, prefix = '  NROY Progress:', suffix = '\n')
             print("  NROY has", self.NROY.shape[0], "points, including original",
                   LOC.shape[0], "seed points")
+            # NOTE: not storing multivariate implausibility - NROY_I only used for plotting
             if len(self.NROY_I) > 0:
                 self.NROY_I = np.concatenate( (self.I[self.NIMP], self.NROY_I), axis=0 )
             else:
@@ -373,6 +382,7 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
 
         ## determine the max'th Implausibility
         print("  Determining", maxno, "max'th implausibility...")
+        # NOTE: not using multivariate implausibility for plotting, since MVI values on different scale
         if NIMP == True:
             T = wave.TESTS
             Imaxes = np.partition(wave.I, -maxno)[:,-maxno]
@@ -468,14 +478,15 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
                 ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c='black')
         if len(points) == 2:
             print("  Plotting 'points' coloured by implausibility (assuming these points are simulation points...)")
-            pointsX, Isim = wave.simImp(data = points)
-            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
+            pointsX, Isim, mIsim = wave.simImp(data = points)
+            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno] # NOTE: not for multivariate implausibility
             Temp = np.hstack([IsimMaxes[:,None], pointsX])
             Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
             IsimMaxes, pointsX = Temp[:,0], Temp[:,1:]
             for s in gSets:
                 #ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=vmin, vmax=wave.cm, edgecolor='black')
-                ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm)#, edgecolor='black')
+                pointImp = ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+                if colorbar and not(sims) and not(odp): plt.colorbar(pointImp, ax=ax[pltRef[s[0]],pltRef[s[1]]])
 
     plt.show()
     return
