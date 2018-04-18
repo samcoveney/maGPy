@@ -338,7 +338,7 @@ def colormap(cmap, b, t, mode="imp"):
     return new_cmap
 
 ## implausibility and optical depth plots for all pairs of active indices
-def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False, replot=False, colorbar=True, activeId = [], NROY=False, NIMP=True, manualRange={}, vmin=0.0):
+def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], odp=True, sims=False, replot=False, colorbar=True, activeId = [], NROY=False, NIMP=True, manualRange={}, vmin=0.0, vmax=None):
 
     print("= Creating History Matching plots =")
 
@@ -396,8 +396,8 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
         ## plots simulation points colored by imp (no posterior variance since these are sim points)
         print("  Plotting simulations points coloured by implausibility...")
         if sims:
-            simPoints, Isim = wave.simImp()
-            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno]
+            simPoints, Isim, mIsim = wave.simImp()
+            IsimMaxes = np.partition(Isim, -maxno)[:,-maxno] # NOTE: not for multivariate implausibility
             Temp = np.hstack([IsimMaxes[:,None], simPoints])
             Temp = Temp[(-Temp[:,0]).argsort()] # sort by Imp, lowest first...
             IsimMaxes, simPoints = Temp[:,0], Temp[:,1:]
@@ -428,19 +428,19 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], sims=False
             # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm,
+              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax,
               extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
             if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
             # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
             if sims == True:
-                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm)#, edgecolor='black')
-            else:
+                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+            if odp == True and sims == False:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
                   gridsize=grid, cmap=colormap(plt.get_cmap('gist_stern'),1.0,0.25, mode="odp"), vmin=0.0, vmax=None, # vmin = 0.00000001, vmax=None,
                   extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1)
-            if colorbar: plt.colorbar(im_odp, ax=odpPlot)
+            if colorbar and (odp or sims): plt.colorbar(im_odp, ax=odpPlot)
 
             # force equal axes
             impPlot.set_xlim(exPlt[0], exPlt[1]); impPlot.set_ylim(exPlt[2], exPlt[3])
