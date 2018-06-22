@@ -334,7 +334,7 @@ def colormap(cmap, b, t, mode="imp"):
     #cm[0:50,3] = np.linspace(0.80,1.0,50) # adjust alphas (transparencies)
     new_cmap = colors.LinearSegmentedColormap.from_list('trunc({n},{a:.2f},{b:.2f})'.format(n=cmap.name, a=b, b=t), cm )
     #new_cmap.set_under(color=myGrey())    
-    if mode == "imp": new_cmap.set_over(color="#ff0000")    
+    if mode == "imp": new_cmap.set_over(color="black")    
     return new_cmap
 
 ## implausibility and optical depth plots for all pairs of active indices
@@ -428,13 +428,15 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], odp=True, 
             # imp subplot - bin points by Imax value, 'reduce' bin points by minimum of these Imaxes
             im_imp = impPlot.hexbin(
               T[:,s[0]], T[:,s[1]], C = Imaxes,
-              gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax,
+              #gridsize=grid, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax,
+              gridsize=grid, cmap=colormap(plt.get_cmap('hot'),1.0,0.0), vmin=vmin, vmax=wave.cm if vmax is None else vmax,
               extent=( 0,1,0,1 ), linewidths=0.2, mincnt=1, reduce_C_function=np.min)
             if colorbar: plt.colorbar(im_imp, ax=impPlot); 
 
             # odp subplot - bin points if Imax < cutoff, 'reduce' function is np.mean() - result gives fraciton of points satisfying Imax < cutoff
             if sims == True:
-                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+                #im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+                im_odp = odpPlot.scatter(simPoints[:,s[0]], simPoints[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('hot'),1.0,0.0), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
             if odp == True and sims == False:
                 im_odp = odpPlot.hexbin(
                   T[:,s[0]], T[:,s[1]], C = Imaxes<wave.cm,
@@ -485,7 +487,8 @@ def plotImp(wave, maxno=1, grid=10, filename="hexbin.pkl", points=[], odp=True, 
             IsimMaxes, pointsX = Temp[:,0], Temp[:,1:]
             for s in gSets:
                 #ax[pltRef[s[1]],pltRef[s[0]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.85), vmin=vmin, vmax=wave.cm, edgecolor='black')
-                pointImp = ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+                #pointImp = ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('nipy_spectral'),0.60,0.825), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
+                pointImp = ax[pltRef[s[0]],pltRef[s[1]]].scatter(pointsX[:,s[0]], pointsX[:,s[1]], s=25, c=IsimMaxes, cmap=colormap(plt.get_cmap('hot'),1.0,0.0), vmin=vmin, vmax=wave.cm if vmax is None else vmax)#, edgecolor='black')
                 if colorbar and not(sims) and not(odp): plt.colorbar(pointImp, ax=ax[pltRef[s[0]],pltRef[s[1]]])
 
     plt.show()
