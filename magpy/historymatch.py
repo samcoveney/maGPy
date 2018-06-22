@@ -129,6 +129,7 @@ class Wave:
             Isim[:,o] = np.sqrt( ( pmean - z )**2 / ( v ) )
         
         ## calculate multivariate implausibility
+        mIsim = []
         if self.covar is not None:
             print("= Calculating multivariate implausibility of simulation points =")
             P = X.shape[0]
