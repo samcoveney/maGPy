@@ -46,7 +46,8 @@ class Wave:
     ## pickle a list of relevant data
     def save(self, filename):
         print("= Pickling wave data in", filename, "=")
-        w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI ]
+        #w = [ self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI ]
+        w = [ self.TESTS, self.I, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI ]
         with open(filename, 'wb') as output:
             pickle.dump(w, output, pickle.HIGHEST_PROTOCOL)
         return
@@ -56,7 +57,8 @@ class Wave:
         print("= Unpickling wave data in", filename, "=")
         with open(filename, 'rb') as input:
             w = pickle.load(input)
-        self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI = [i for i in w]
+        #self.TESTS, self.I, self.pm, self.pv, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI = [i for i in w]
+        self.TESTS, self.I, self.NIMP, self.NIMPminmax, self.doneImp, self.NROY, self.NROYminmax, self.NROY_I, self.mI = [i for i in w]
         return
 
     ## set the test data
