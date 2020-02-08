@@ -53,42 +53,40 @@ def loglikelihood_gp4ml(guess, E, Beta=False, debug=False):
 
         if Beta: return B
 
-        return LLH
+#        return LLH
 
-#
-#        gradLLH = np.empty(guess.size)
-#
-#        for hp in range(guess.size):
-#            ## wrt delta
-#            if hp < E.GP.delta.size:
-#                gradHP = E.GP.K.gradWrtDelta(E.Data.xT[:,hp], E.GP.delta[hp], E.GP.nugget, s2)
-#                invA_gradHP = linalg.cho_solve(L, gradHP)
-#            ## wrt nugget, if nugget is being trained
-#            if hp == E.GP.delta.size and E.GP.fixNugget == False:
-#                gradHP = E.GP.K.gradWrtNugget(E.GP.nugget, s2)
-#                invA_gradHP = linalg.cho_solve(L, gradHP)
-#            ## wrt sigma
-#            if hp == guess.size - 1:
-#                #invA_gradHP = linalg.cho_solve(L, gradHP)
-#                invA_gradHP = np.diag(np.ones(n))
-#
-#            sam = (invA_gradHP).dot(invA_H_dot_B)
-#            gradLLH[hp] = -0.5* (\
-#              - np.trace(invA_gradHP) \
-#              + (y.T).dot(invA_gradHP).dot(invA_y) \
-#              + ( - 2*y.T + H.dot(B) ).dot(sam) \
-#              + np.trace( linalg.cho_solve(K, H.T.dot(invA_gradHP).dot(invA_H) ) ) )
-#
-#        # fix?
-#        #gradLLH = gradLLH * guess/2.0
-#
-#        if debug == False:
-#            return LLH, gradLLH
-#        elif debug == "func":
-#            return LLH
-#        elif debug == "grad":
-#            print("LLH grad:", gradLLH)
-#            return gradLLH
+
+        gradLLH = np.empty(guess.size)
+
+        for hp in range(guess.size):
+            ## wrt delta
+            if hp < E.GP.delta.size:
+                gradHP = E.GP.K.gradWrtDelta(E.Data.xT[:,hp], E.GP.delta[hp], E.GP.nugget, s2)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+            ## wrt nugget, if nugget is being trained
+            if hp == E.GP.delta.size and E.GP.fixNugget == False:
+                gradHP = E.GP.K.gradWrtNugget(E.GP.nugget, s2)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+            ## wrt sigma
+            if hp == guess.size - 1:
+                #invA_gradHP = linalg.cho_solve(L, gradHP)
+                invA_gradHP = np.diag(np.ones(n))
+
+            sam = (invA_gradHP).dot(invA_H_dot_B)
+            gradLLH[hp] = -0.5* (\
+              - np.trace(invA_gradHP) \
+              + (y.T).dot(invA_gradHP).dot(invA_y) \
+              + ( - 2*y.T + H.dot(B) ).dot(sam) \
+              + np.trace( linalg.cho_solve(K, H.T.dot(invA_gradHP).dot(invA_H) ) ) )
+
+
+        if debug == False:
+            return LLH, gradLLH
+        elif debug == "func":
+            return LLH
+        elif debug == "grad":
+            print("LLH grad:", gradLLH)
+            return gradLLH
 
     except np.linalg.linalg.LinAlgError as e:
         print("  WARNING: Matrix not PSD for", guess, ", not fit.")
@@ -131,46 +129,44 @@ def loglikelihood_mucm(guess, E, SigmaBeta=False, debug=False):
         
         if SigmaBeta: return [np.sqrt(s2), B]
 
-        return LLH
-#
-#        factor = (n - q) / (s2*(n - q - 2))
-#        gradLLH = np.empty(guess.size)
-#
-#        ## need to send 's2 = 1' since s2 not factor of covar in MUCM method
-#        for hp in range(guess.size):
-#            ## wrt delta
-#            if hp < E.GP.delta.size:
-#                gradHP = E.GP.K.gradWrtDelta(E.Data.xT[:,hp], E.GP.delta[hp], E.GP.nugget, 1.0)
-#                invA_gradHP = linalg.cho_solve(L, gradHP)
-#            ## wrt nugget, if nugget is being trained
-#            if hp == E.GP.delta.size and E.GP.fixNugget == False:
-#                gradHP = E.GP.K.gradWrtNugget(E.GP.nugget, 1.0)
-#                invA_gradHP = linalg.cho_solve(L, gradHP)
-#
-#            sam = (invA_gradHP).dot(invA_H_dot_B)
-#            #new = linalg.cho_solve(K, H.T.dot(invA_gradHP)) #.dot(invA_H) )
-#            gradLLH[hp] = -0.5* (\
-#              - np.trace(invA_gradHP) \
-#              + factor*( \
-#                  + (y.T).dot(invA_gradHP).dot(invA_y) \
-#                  + ( - 2*y.T + H.dot(B) ).dot(sam) \
-#                  #- (y.T).dot(invA_gradHP).dot(invA_y) \
-#                  #- ( - y.T + H.dot(B) ).dot(sam) \
-#                  #+ (y.T).dot(invA_H).dot(new).dot(invA_y)
-#                       ) \
-#              #+ np.trace( new.dot(invA_H) ) )
-#              + np.trace( linalg.cho_solve(K, H.T.dot(invA_gradHP).dot(invA_H) ) ) )
-#
-#        # fix?
-#        gradLLH = gradLLH * guess/2.0
-#
-#        if debug == False:
-#            return LLH, gradLLH
-#        elif debug == "func":
-#            return LLH
-#        elif debug == "grad":
-#            print("LLH grad:", gradLLH)
-#            return gradLLH
+#        return LLH
+
+        factor = (n - q) / (s2*(n - q - 2))
+        gradLLH = np.empty(guess.size)
+
+        ## need to send 's2 = 1' since s2 not factor of covar in MUCM method
+        for hp in range(guess.size):
+            ## wrt delta
+            if hp < E.GP.delta.size:
+                gradHP = E.GP.K.gradWrtDelta(E.Data.xT[:,hp], E.GP.delta[hp], E.GP.nugget, 1.0)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+            ## wrt nugget, if nugget is being trained
+            if hp == E.GP.delta.size and E.GP.fixNugget == False:
+                gradHP = E.GP.K.gradWrtNugget(E.GP.nugget, 1.0)
+                invA_gradHP = linalg.cho_solve(L, gradHP)
+
+            sam = (invA_gradHP).dot(invA_H_dot_B)
+            #new = linalg.cho_solve(K, H.T.dot(invA_gradHP)) #.dot(invA_H) )
+            gradLLH[hp] = -0.5* (\
+              - np.trace(invA_gradHP) \
+              + factor*( \
+                  + (y.T).dot(invA_gradHP).dot(invA_y) \
+                  + ( - 2*y.T + H.dot(B) ).dot(sam) \
+                  #- (y.T).dot(invA_gradHP).dot(invA_y) \
+                  #- ( - y.T + H.dot(B) ).dot(sam) \
+                  #+ (y.T).dot(invA_H).dot(new).dot(invA_y)
+                       ) \
+              #+ np.trace( new.dot(invA_H) ) )
+              + np.trace( linalg.cho_solve(K, H.T.dot(invA_gradHP).dot(invA_H) ) ) )
+
+
+        if debug == False:
+            return LLH, gradLLH
+        elif debug == "func":
+            return LLH
+        elif debug == "grad":
+            print("LLH grad:", gradLLH)
+            return gradLLH
 
     except np.linalg.linalg.LinAlgError as e:
         print("  WARNING: Matrix not PSD for", guess, ", not fit.")
@@ -259,9 +255,8 @@ def optimize(E, tries=1, bounds={}, constraints={}, message=False):
                 res = minimize(LLH, guess, args=(E, False, "func"),
                         method = 'Nelder-Mead', jac=False, bounds=constraintsTransform)
             else:
-                #res = minimize(LLH, guess, args=(E,), method = 'BFGS', jac=True)
-                #res = minimize(LLH, guess, args=(E,), method = 'L-BFGS-B', jac=True)
-                res = minimize(LLH, guess, args=(E, False, "func"), method = 'Nelder-Mead', jac=False)
+                res = minimize(LLH, guess, args=(E,), method = 'L-BFGS-B', jac=True)
+                #res = minimize(LLH, guess, args=(E, False, "func"), method = 'Nelder-Mead', jac=False)
 
             ## for checks on if function gradient is correct
             debugGrad = False

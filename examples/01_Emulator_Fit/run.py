@@ -45,6 +45,8 @@ parser.add_argument("--fitnoise", default=False,
         help="nugget will be trained on the data", action="store_true")
 parser.add_argument("--load", default=False,
         help="attempt to load emulator from .pkl file", action="store_true")
+parser.add_argument("--mucm", default=False,
+        help="use the MUCM method to fit the hyperparameters", action="store_true")
 args = parser.parse_args()
 
 
@@ -79,7 +81,7 @@ if args.load == False:
     ## setup the emulator
     E.Data.setup(INPUTS, OUTPUTS)
     E.Basis.setup()
-    E.GP.setup(nugget = args.nugget, fixNugget = (not args.fitnoise))
+    E.GP.setup(nugget = args.nugget, fixNugget = (not args.fitnoise), mucm = args.mucm)
 
     ## optimize the emulator
     print("... Fitting an emulator")
