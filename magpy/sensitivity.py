@@ -631,7 +631,7 @@ class Sensitivity:
         self.b4_input_loop()
         for P in range(0,len(self.m)):
             self.setup_w_wb(P)
-            self.af_w_wb_def()
+            #self.af_w_wb_def() # NOTE: moved from here...
 
             ## swap around so we calc E*[V_wb]
             temp = self.w
@@ -640,6 +640,7 @@ class Sensitivity:
             ## then define xw as the means (value doesn't matter)
             self.xw = self.m[self.w]
             #print(self.w, self.wb)
+            self.af_w_wb_def() # NOTE: to here
             self.in_xw_loop()
 
             self.EEE = (self.sigma**2) *\
